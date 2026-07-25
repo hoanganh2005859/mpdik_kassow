@@ -66,10 +66,19 @@ def run_evaluation(
     methods=("warm_start", "cold_start"),
     show_progress: bool = False,
     model_context=None,
+    allow_frozen: bool = False,
 ) -> dict:
+    """``allow_frozen`` defaults to False: by default only ``EVAL_SPLITS`` (development,
+    validation) may be run here, exactly as in Phase 8A. Passing ``allow_frozen=True`` is the
+    single, explicit opt-in required to evaluate ``frozen_test`` (Phase 8B); callers doing so are
+    expected to have already gated the call behind the frozen access ledger."""
+    allowed_splits = set(EVAL_SPLITS) | ({"frozen_test"} if allow_frozen else set())
     for split in splits:
-        if split not in EVAL_SPLITS:
-            raise ValueError(f"split '{split}' is not allowed in Phase 8A (frozen_test is off-limits)")
+        if split not in allowed_splits:
+            raise ValueError(
+                f"split '{split}' is not allowed (frozen_test requires allow_frozen=True, "
+                "gated by the frozen access ledger)"
+            )
 
     ds = require_dataset_v2_root(dataset_root)
     public = require_public_eval_root(public_root)

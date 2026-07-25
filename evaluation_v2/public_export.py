@@ -129,6 +129,99 @@ def _write_manifest_csv(path: Path, columns, rows: List[dict]) -> None:
     tmp.replace(path)
 
 
+def export_frozen_public_only(dataset_root, frozen_public_root, *, overwrite: bool = False) -> dict:
+    """Export ONLY the ``frozen_test`` split's public fields, to a root separate from the
+    development/validation public root. Uses the exact same whitelists as
+    :func:`export_public_and_protected` -- no protected/reference-derived field is ever selected.
+
+    This is the single, deliberate frozen-export path for the one-time official frozen run
+    (Phase 8B). It never writes anything under a protected root -- there is no protected-frozen
+    output; frozen isolation is verified directly against this root's contents.
+    """
+    ds = require_dataset_v2_root(dataset_root)
+    public = public_eval_paths(frozen_public_root, require_exists=False)
+    split = "frozen_test"
+
+    if public.root.exists() and any(public.root.iterdir()) and not overwrite:
+        raise FileExistsError(
+            f"frozen public root {public.root} already exists and is non-empty; pass overwrite=True."
+        )
+    if public.root.resolve() == ds.root.resolve():
+        raise ValueError("frozen public root must be distinct from the dataset root.")
+
+    public.point_ik_dir.mkdir(parents=True, exist_ok=True)
+    public.trials_dir.mkdir(parents=True, exist_ok=True)
+    public.trajectories_dir.mkdir(parents=True, exist_ok=True)
+
+    summary = {"splits": [split], "point_ik": {}, "trials": {}, "trajectories": {}}
+
+    # ----- Point-IK -----
+    raw = load_npz(ds.tier1_point_ik_dir / f"{split}.npz")
+    public_arrays = _select_public_arrays(raw, PUBLIC_POINT_IK_KEYS)
+    save_npz(public.point_ik_split_file(split), public_arrays, overwrite=True)
+    summary["point_ik"][split] = int(raw["sample_id"].shape[0])
+
+    # ----- Trials -----
+    raw = load_npz(ds.trials_dir / f"{split}.npz")
+    assert_no_protected_fields(raw, f"trial NPZ {split} (source)")
+    public_arrays = _select_public_arrays(raw, PUBLIC_TRIAL_KEYS)
+    save_npz(public.trials_split_file(split), public_arrays, overwrite=True)
+    summary["trials"][split] = int(raw["trial_id"].shape[0])
+
+    # ----- Trajectories -----
+    catalog = load_combined_catalog(ds.root)
+    manifest_rows: List[dict] = []
+    n_traj = 0
+    for row in catalog:
+        if row["split"] != split:
+            continue
+        traj = load_protected_trajectory(ds.root, row["trajectory_id"], catalog_row=row)
+        public_canonical = {k: v for k, v in traj.canonical.items() if k not in PROTECTED_ARRAY_KEYS}
+        leaked = find_protected_fields(public_canonical.keys())
+        if leaked:  # pragma: no cover - defensive
+            raise AssertionError(f"public trajectory would leak {leaked}")
+        out_dir = public.trajectory_split_dir(split)
+        out_dir.mkdir(parents=True, exist_ok=True)
+        out_file = out_dir / f"{row['trajectory_id']}.npz"
+        save_npz(out_file, public_canonical, overwrite=True)
+        rel = out_file.relative_to(public.root).as_posix()
+        manifest_rows.append(
+            {
+                **{c: row.get(c, "") for c in PUBLIC_MANIFEST_COLUMNS if c in row},
+                "public_canonical_path": rel,
+                "public_sha256": sha256_file(out_file),
+            }
+        )
+        n_traj += 1
+    manifest_rows = sorted(manifest_rows, key=lambda r: r["trajectory_id"])
+    _write_manifest_csv(public.trajectory_split_dir(split) / "public_manifest.csv", PUBLIC_MANIFEST_COLUMNS, manifest_rows)
+    _write_manifest_csv(public.combined_manifest_file(), PUBLIC_MANIFEST_COLUMNS, manifest_rows)
+    summary["trajectories"][split] = n_traj
+
+    # ----- Manifest with fingerprints -----
+    dataset_fp = fingerprints.directory_fingerprint(ds.root)
+    public_manifest = {
+        "source_dataset_root_fingerprint": dataset_fp["sha256"],
+        "source_dataset_file_count": dataset_fp["file_count"],
+        "splits_exported": [split],
+        "frozen_test_exported": True,
+        "counts": summary,
+        "public_point_ik_keys": list(PUBLIC_POINT_IK_KEYS),
+        "public_trial_keys": list(PUBLIC_TRIAL_KEYS),
+        "protected_keys_excluded": sorted(set(PROTECTED_POINT_IK_KEYS) | set(PROTECTED_ARRAY_KEYS)),
+        "code_fingerprint": fingerprints.code_fingerprint(),
+        "environment": fingerprints.environment_fingerprint(),
+    }
+    _write_json(public.manifest_file, public_manifest)
+    public_fp = fingerprints.directory_fingerprint(public.root, skip_names={public.manifest_file.name})
+    public_manifest["public_bundle_fingerprint"] = public_fp["sha256"]
+    public_manifest["public_bundle_file_count"] = public_fp["file_count"]
+    _write_json(public.manifest_file, public_manifest)
+
+    summary["public_bundle_fingerprint"] = public_manifest["public_bundle_fingerprint"]
+    return summary
+
+
 def export_public_and_protected(
     dataset_root,
     public_root,

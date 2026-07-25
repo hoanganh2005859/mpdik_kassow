@@ -2212,3 +2212,83 @@ threshold. Written to `candidate_preregistration.json`.
 Full development selection (5 candidates x development), one-shot validation confirmation, full
 dev+val compute, evaluation lock bundle finalization, and the final full pytest. `frozen_test`
 remains unopened.
+
+## Phase 8B: frozen confirmation, final DLS report, public v2.0.0 release
+
+Selected candidate `cand_D_pure_dls` locked in Phase 8A (`evaluation_lock_bundle.json`,
+`lock_status=candidate_locked_pending_commit`, commit `b999be80`). No candidate/threshold/solver
+value was re-derived here -- everything is read verbatim from that lock bundle.
+
+### Pre-frozen verification
+
+All 6 lock-bundle fingerprints (config/dataset/public/protected/development-output/
+validation-output) reconfirmed by independent recompute before touching `frozen_test`. The two
+output fingerprints require `directory_fingerprint(run_dir, skip_names={"run_manifest.json"})`
+(the same self-reference-avoidance pattern already used for the public/protected manifests) --
+documented here since it is not obvious from the stored value alone. Dev/validation run
+directories showed zero files with an mtime after their own completion, and both checkpoints
+(421/421 shards each) verified with 0 corrupted shards.
+
+### Frozen access control (new: `evaluation_v2/frozen_ledger.py`)
+
+Append-only `frozen_access_ledger.json`: `access_count` = number of distinct `run_id`s ever
+recorded; a resume under the same `run_id` appends a `resumed_for_official_run` event without
+bumping the count; a second, different `run_id` raises `FrozenAccessLimitExceeded`. `frozen_test`
+was opened exactly once, under `run_id=frozen_official_cand_D_pure_dls_run1`, `access_count=1`.
+
+### Frozen export + evaluation (edits: `orchestrator.py`, `public_export.py` -- both
+solver-critical, so the full suite was run before frozen per project policy)
+
+- `public_export.export_frozen_public_only()` (new, additive): exports ONLY `frozen_test`'s public
+  fields (same whitelists as the dev/val exporter) to a separate root
+  `mpdik_kassow_v2_eval_public_frozen` -- 3,600 Point-IK, 210 trials, 70 trajectories, 0 protected
+  keys.
+- `orchestrator.run_evaluation(..., allow_frozen=False)` (new opt-in flag, default unchanged):
+  `frozen_test` is reachable only with `allow_frozen=True`; every other caller's guard behavior is
+  identical to Phase 8A.
+- New CLI `pipelines/run_dataset_v2_frozen_confirmation.py`: re-verifies the dataset fingerprint,
+  opens/resumes the ledger, exports the frozen public root if absent, then runs `cand_D_pure_dls`
+  on `splits=("frozen_test",)` with no sample/trial/waypoint limit.
+- Full pytest before frozen: 789 passed, 0 failed/skipped/errors (2061.79s). Solver-critical file
+  hash diff against the Phase 8A lock showed exactly 2 changed files (`orchestrator.py`,
+  `public_export.py`, both additive); the other 10 (solver, point/trajectory eval, candidate
+  configs, protected guard, checkpoint, selection, locator) were byte-identical.
+
+### Frozen result (`mpdik_kassow_v2_eval_frozen/frozen_test/cand_D_pure_dls`)
+
+171,600/171,600 DLS solves exactly (3,600 point-IK + 168,000 waypoint = 210 trials x 2 methods x
+400 waypoints), 0 duplicates, 0 non-finite, 421/421 checkpoint shards verified, Tier 0 gate pass.
+Point-IK standard success 0.9508; warm-start trial-macro standard 0.5493; cold-start 0.3292.
+Dominant failure reasons: `stagnation` and `max_iterations` (never non-finite). Candidate config
+used is byte-identical to the Phase 8A lock (`resolved_config.json` vs `evaluation_lock_bundle
+.json` compared field-by-field) -- no retuning. Known cosmetic defect: `run_manifest.json`'s
+`frozen_test_accessed` field is a stale hardcoded `false` left over from the Phase 8A orchestrator
+(never updated for the new `allow_frozen` path); actual frozen access is authoritatively tracked
+by `frozen_access_ledger.json` and by `resolved_config.json`'s `splits=["frozen_test"]`, not by
+that field. Left unfixed rather than touching solver-critical code again after the official run.
+
+### Public Dataset v2.0.0 release (new: `evaluation_v2/release_builder.py`,
+`evaluation_v2/release_packaging.py`, `pipelines/build_dataset_v2_release.py`)
+
+Pure packaging over already-public, already-checksummed data (never reads the dataset root's
+protected arrays or the protected-validation root's contents). Combines development + validation
++ frozen_test public exports into `D:\data\hoang_anh\KR810_Tier0_Tier4_Dataset_v2.0.0`: 6,000
+Point-IK samples (1200+1200+3600), 630 trials (210x3), 210 trajectories (70x3), 84,000 canonical
+waypoints -- matching the required release counts exactly. Three ZIPs + `SHA256SUMS.txt`:
+`..._Dataset_v2.0.0.zip` (public), `..._DLS_Baseline_v2.0.0.zip` (dev/val/frozen evaluation
+outputs, checkpoints excluded), `..._Protected_Validation_v2.0.0.zip` (dev/val protected
+reconstruction evidence only, marked `INTERNAL_PROTECTED_VALIDATION_NOT_FOR_EVALUATION`; no
+frozen protected evidence was ever generated). Public ZIP re-extracted and independently
+re-validated: checksum pass, loader pass, 0 protected leaks.
+
+### Targeted tests (no full-suite rerun needed for these; not solver-critical-path)
+
+`tests/test_dataset_v2_frozen.py` (6: ledger access-count enforcement, `allow_frozen` guard,
+frozen export isolation), `tests/test_dataset_v2_release.py` (4: checksum manifest, ZIP
+extract-validate, protected-leak detection, protected-archive marker). All pass.
+
+### Status
+
+`execution_status=completed`, `structural_acceptance_status=passed`,
+`quantitative_performance_acceptance_status=not_defined`, `frozen_access_count=1`. Not committed
+or pushed. Phase 8B (MPDIK/PPO/MAPPO, dynamics) not started.
