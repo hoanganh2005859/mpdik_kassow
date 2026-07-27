@@ -1,0 +1,98 @@
+{
+  "_comment": "Dataset v2 target-vs-actual 3D plot presets. Every id/value below was read from the real Dataset v2 work root and its development/cand_D_pure_dls evaluation run on 2026-07-27 -- nothing here is synthetic. Regenerate this file (see selection_rule) if the dataset or evaluation run is regenerated.",
+  "schema_version": "1.0.0",
+  "generated_from": {
+    "dataset_v2_version": "2.0.0-dev",
+    "dataset_v2_root_hint": "mpdik_kassow_v2_work",
+    "trajectory_manifests": [
+      "trajectories/core_trajectory_manifest.csv",
+      "trajectories/challenge_trajectory_manifest.csv"
+    ],
+    "trial_manifest": "trials/trial_manifest.csv",
+    "eval_root_hint": "mpdik_kassow_v2_eval_devval",
+    "eval_candidate_id": "cand_D_pure_dls",
+    "eval_run_manifest": "development/cand_D_pure_dls/run_manifest.json",
+    "eval_waypoint_results": "development/cand_D_pure_dls/tier2_sequential_dls/waypoint_results.csv",
+    "note": "cand_D_pure_dls is the pre-registered candidate actually selected by evaluation_v2/selection.py and locked for the frozen_test run (see docs/V2_IMPLEMENTATION_LOG.md Phase 8A/8B and KR810_Tier0_Tier4_Dataset_v2.0.0/evaluation_protocol.json). Its 'warm_start' method column is Dataset v2's warm-start DLS."
+  },
+  "selection_rule": [
+    "1. Filter core_trajectory_manifest.csv / challenge_trajectory_manifest.csv rows by the preset's shape/orientation_mode (core) or challenge_family (challenge).",
+    "2. Sort surviving rows by trajectory_id (lexical, ascending).",
+    "3. Take the first trajectory_id.",
+    "4. Filter trials/trial_manifest.csv rows to trial_id == '<trajectory_id>_trial_<difficulty>' (exactly one row per trajectory per difficulty by construction -- 3 trials/trajectory, spec section J).",
+    "5. Sort by trial_id (lexical, ascending) -- a no-op here since step 4 already narrows to one row, but kept for determinism if a future filter is loosened.",
+    "6. Take the first trial_id.",
+    "7. Look up that trial_id's 400 waypoint rows in tier2_sequential_dls/waypoint_results.csv, method == 'warm_start' (warm-start DLS), sorted by waypoint_id ascending.",
+    "8. target_position_{x,y,z}/target_quaternion_q{w,x,y,z} = the requested Cartesian target trajectory; actual_position_{x,y,z}/actual_quaternion_q{w,x,y,z} = the DLS-achieved trajectory from that same evaluation run.",
+    "No best-case cherry-picking: selection never inspects position_error_m, success flags, or any other outcome column before picking the trajectory/trial -- only identity/metadata fields (shape, orientation_mode, challenge_family, split membership implied by anchor/trajectory generation) are used as filters."
+  ],
+  "presets": {
+    "easy": {
+      "level": "easy",
+      "description": "Core trajectory, line shape, fixed orientation, easy initial state, warm-start DLS.",
+      "filters": {
+        "source": "core",
+        "shape": "line",
+        "orientation_mode": "fixed",
+        "difficulty": "easy"
+      },
+      "resolved": {
+        "trajectory_id": "core_line_fixed_anchor_near_limit_00",
+        "trial_id": "core_line_fixed_anchor_near_limit_00_trial_easy",
+        "split": "development",
+        "anchor_id": "anchor_near_limit_00",
+        "anchor_class": "near_limit",
+        "arc_length_m": 0.12,
+        "duration_s": 10.0,
+        "closed_path": false,
+        "primary_difficulty_metric": 0.729540211753,
+        "eval_candidate_id": "cand_D_pure_dls",
+        "method": "warm_start"
+      }
+    },
+    "medium": {
+      "level": "medium",
+      "description": "Core trajectory, helix shape, variable orientation, medium initial state, warm-start DLS.",
+      "filters": {
+        "source": "core",
+        "shape": "helix",
+        "orientation_mode": "variable",
+        "difficulty": "medium"
+      },
+      "resolved": {
+        "trajectory_id": "core_helix_variable_anchor_near_limit_00",
+        "trial_id": "core_helix_variable_anchor_near_limit_00_trial_medium",
+        "split": "development",
+        "anchor_id": "anchor_near_limit_00",
+        "anchor_class": "near_limit",
+        "arc_length_m": 0.2637497310,
+        "duration_s": 10.0,
+        "closed_path": false,
+        "primary_difficulty_metric": 0.985338224467,
+        "eval_candidate_id": "cand_D_pure_dls",
+        "method": "warm_start"
+      }
+    },
+    "hard": {
+      "level": "hard",
+      "description": "Random-challenge trajectory, non_planar family, hard initial state, warm-start DLS.",
+      "filters": {
+        "source": "challenge",
+        "challenge_family": "non_planar",
+        "difficulty": "hard"
+      },
+      "resolved": {
+        "trajectory_id": "challenge_development_010",
+        "trial_id": "challenge_development_010_trial_hard",
+        "split": "development",
+        "challenge_family": "non_planar",
+        "arc_length_m": 2.5201918783,
+        "duration_s": 10.0,
+        "non_planarity": 0.0298838060749,
+        "primary_difficulty_metric": 1.27798768779,
+        "eval_candidate_id": "cand_D_pure_dls",
+        "method": "warm_start"
+      }
+    }
+  }
+}

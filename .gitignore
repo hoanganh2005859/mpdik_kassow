@@ -1,8 +1,10 @@
 .venv/
+.venv-swift/
 __pycache__/
 *.py[cod]
 .pytest_cache/
 .ipynb_checkpoints/
+visualization/figures/
 build/
 dist/
 *.egg-info/
