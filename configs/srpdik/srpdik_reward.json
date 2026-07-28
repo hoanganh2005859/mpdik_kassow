@@ -1,0 +1,62 @@
+{
+  "baseline_definition": "B = DLS(q_initial, T_d); H = DLS(q_seed, T_d); identical target/config/tolerance/max-iterations",
+  "description": "SR-PPO-DLS paired reward formula lock (PDF section 7, eq. 47-53). Weight values are hyperparameters (TPE-searched in a later phase), not fixed here.",
+  "implementation_status": "CONFIGURED",
+  "method_version": "0.1.0-phase1",
+  "primary_tier": "standard",
+  "schema_version": "1.0.0",
+  "success_tiers": [
+    "coarse",
+    "standard",
+    "strict"
+  ],
+  "terms": [
+    {
+      "formula": "c_R * (1 - S_B) * S_H",
+      "name": "rescue_bonus"
+    },
+    {
+      "constraint": "c_D > c_R",
+      "formula": "-c_D * S_B * (1 - S_H)",
+      "name": "degradation_penalty"
+    },
+    {
+      "formula": "c_E * clip(E_B - E_H, -1, 1)",
+      "name": "error_improvement"
+    },
+    {
+      "condition": "both baseline and hybrid succeed",
+      "formula": "c_I * clip((I_B - I_H) / I_max, -1, 1)",
+      "name": "iteration_improvement"
+    },
+    {
+      "formula": "-c_a * norm(a)^2",
+      "name": "action_norm_penalty"
+    },
+    {
+      "formula": "-c_m * m(q_seed)",
+      "name": "joint_limit_margin_penalty"
+    },
+    {
+      "formula": "-c_sigma * sigma(q_seed)",
+      "name": "near_singularity_penalty"
+    },
+    {
+      "formula": "-c_F * indicator(fallback)",
+      "name": "fallback_penalty"
+    }
+  ],
+  "weight_symbols": [
+    "c_R",
+    "c_D",
+    "c_E",
+    "c_I",
+    "c_a",
+    "c_m",
+    "c_sigma",
+    "c_F",
+    "epsilon",
+    "delta"
+  ],
+  "weight_values": "hyperparameters searched via TPE in a later phase, not hardcoded here"
+}

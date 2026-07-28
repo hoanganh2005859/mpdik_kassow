@@ -1,0 +1,48 @@
+{
+  "acceptance_gate_thresholds": "dev-locked in a later phase, not fixed here",
+  "acceptance_gates_count": 7,
+  "acceptance_gates_source": "PDF section 10.5, pre-registered on development before validation",
+  "description": "SR-PPO-DLS evaluation protocol lock (PDF section 10): mandatory baselines, metrics, paired statistics, acceptance gates. Not run in Phase 1.",
+  "implementation_status": "PLANNED",
+  "mandatory_baselines": [
+    "pure_dls",
+    "random_residual_plus_dls",
+    "dls_probe_heuristic_seed_plus_dls",
+    "ppo_residual_without_safety_filter_plus_dls",
+    "ppo_residual_without_dls_probe_feature_plus_dls",
+    "sr_ppo_dls_full"
+  ],
+  "method_version": "0.1.0-phase1",
+  "paired_statistics": [
+    "paired_bootstrap_95pct_ci_on_success_difference",
+    "mcnemar_test_rescue_vs_degradation"
+  ],
+  "point_ik_metrics": [
+    "coarse_standard_strict_success_per_split_per_difficulty",
+    "rescue_and_degradation_counts",
+    "net_success_gain",
+    "position_orientation_median_p95_max",
+    "dls_iterations_median_p95",
+    "failure_reason_counts",
+    "ppo_action_norm_and_clip_rate",
+    "safety_fallback_rate",
+    "min_joint_limit_margin_and_sigma_min",
+    "runtime_p50_p95_p99_by_stage",
+    "non_finite_count"
+  ],
+  "schema_version": "1.0.0",
+  "trajectory_metrics": [
+    "waypoint_standard_success",
+    "position_orientation_rmse_p95_max",
+    "first_failure_location",
+    "max_failure_streak",
+    "recovery_rate",
+    "cross_track_rmse_p95",
+    "final_progress_ratio_and_coverage",
+    "path_length_ratio",
+    "max_joint_jump",
+    "total_joint_variation",
+    "velocity_jerk",
+    "total_runtime"
+  ]
+}

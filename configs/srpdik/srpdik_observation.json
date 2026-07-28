@@ -1,0 +1,50 @@
+{
+  "description": "SR-PPO-DLS observation composition lock (PDF section 6.3, eq. 33): 36-D total, field order fixed for reproducibility.",
+  "fields": [
+    {
+      "dim": 7,
+      "name": "normalized_joint_state"
+    },
+    {
+      "dim": 3,
+      "name": "normalized_position_error"
+    },
+    {
+      "dim": 3,
+      "name": "normalized_orientation_error"
+    },
+    {
+      "dim": 7,
+      "name": "lower_joint_limit_margin"
+    },
+    {
+      "dim": 7,
+      "name": "upper_joint_limit_margin"
+    },
+    {
+      "dim": 1,
+      "name": "normalized_min_singular_value"
+    },
+    {
+      "dim": 1,
+      "name": "normalized_log_condition_number"
+    },
+    {
+      "dim": 7,
+      "name": "dls_probe_direction_normalized"
+    }
+  ],
+  "forbidden_fields": [
+    "q_target_reference",
+    "q_reference",
+    "q_source_reference",
+    "waypoint_reachable",
+    "position_reconstruction_error_m",
+    "orientation_reconstruction_error_rad"
+  ],
+  "implementation_status": "CONFIGURED",
+  "method_version": "0.1.0-phase1",
+  "observation_dim": 36,
+  "probe_source": "kinematics.dls_solver.dls_single_update (feature only, never applied directly)",
+  "schema_version": "1.0.0"
+}

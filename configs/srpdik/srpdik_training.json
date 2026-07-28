@@ -1,0 +1,14 @@
+{
+  "algorithm": "PPO-Clip actor-critic (Schulman et al.), continuous 7-D residual action, multi-epoch minibatch",
+  "data_source_policy": {
+    "development_split_role": "TPE/reward tuning/curriculum/ablation/checkpoint selection",
+    "frozen_test_split_role": "single final paired evaluation after code/config/model fingerprint lock",
+    "training_stream": "independent online stream, distinct seed namespace from dataset v2 development/validation/frozen_test",
+    "validation_split_role": "single confirmation run of a locked config, no retuning"
+  },
+  "description": "SR-PPO-DLS training-loop structural lock (PDF sections 8.3-8.4). No training is implemented in Phase 1.",
+  "hyperparameters": "TPE-searched in a later phase (action scale, LR, entropy, clip range, network width, safety tolerance), not fixed here",
+  "implementation_status": "PLANNED",
+  "method_version": "0.1.0-phase1",
+  "schema_version": "1.0.0"
+}

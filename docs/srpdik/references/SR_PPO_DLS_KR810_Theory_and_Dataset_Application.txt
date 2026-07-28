@@ -1,0 +1,1263 @@
+                MPDIK KASSOW RESEARCH PROJECT
+
+                SR-PPO-DLS
+
+     Safe Residual PPO-Guided DLS Initializer
+
+Phân tích lý thuyt, công thc toán hc và phng án áp dng
+                vào Dataset v2 ca robot Kassow KR810
+
+ Observation         PPO Actor     Projection       Safety filter       Locked DLS
+                bounded residual  qcand  qproj  accept or fallback  unchanged solver
+q, pose error,
+                    a = qseed
+margins, min,
+  DLS probe
+
+                         Paired reward relative to pure DLS
+                rescue bonus - degradation penalty + error/it-
+
+                  eration improvement - action/limit penalty
+
+                                          Robot: Kassow KR810, 7 bc t do
+            Phm vi: numerical inverse kinematics  mc ng hc; không có actuator,
+
+                                         dynamics, collision hoc robot tht
+                 Baseline: Dataset v2.0.0 và locked DLS candidate cand_D_pure_dls
+
+                                               Ngày tng hp: 27/07/2026
+
+Tài liu này là mt thit k nghiên cu c tng hp t các bài báo và source hin ti. SR-PPO-DLS là
+    phng pháp  xut mi ca project, không phi bn sao nguyên trng ca mt bài báo n l.
+SR-PPO-DLS cho Kassow KR810           Báo cáo lý thuyt và phng án áp dng Dataset v2
+
+Contents
+
+1 Tóm tt iu hành                               1
+
+2 Bài toán nghiên cu và phm vi                 1
+
+2.1 Bài toán IK ca KR810 . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 1
+
+2.2 Phm vi úng ca báo cáo . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 2
+
+2.3 Gi thuyt nghiên cu . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 2
+
+3 Nn tng toán hc ca DLS                        2
+
+3.1 Pose error . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 2
+
+3.2 Jacobian và xp x cc b . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 3
+
+3.3 Bài toán ti u DLS . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 3
+
+3.4 Adaptive damping và gii hn bc . . . . . . . . . . . . . . . . . . . . . . . . . . . . 3
+
+3.5 Ti sao PPO cn ci thin seed thay vì thay DLS . . . . . . . . . . . . . . . . . . . . . 4
+
+4 Nn tng toán hc ca PPO                        4
+
+4.1 MDP cho one-shot initializer . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 4
+
+4.2 Actor-Critic . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 4
+
+4.3 PPO clipped objective . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 5
+
+4.4 Advantage và value loss . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 5
+
+5 Nguyên lý Residual và Safe trong SR-PPO-DLS  5
+
+5.1 Residual reinforcement learning . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 5
+
+5.2 Safety layer và action projection . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 6
+
+5.3 Ti sao cn safety filter khi pure DLS ã mnh . . . . . . . . . . . . . . . . . . . . . 6
+
+6 Kin trúc SR-PPO-DLS c  xut                   6
+
+6.1 S  tng th . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 6
+
+6.2 Mt episode one-shot . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 6
+
+6.3 Observation 36 chiu . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 7
+
+6.4 DLS probe direction . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 7
+
+6.5 Action residual . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 7
+
+6.6 Projection vào safe joint range . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 8
+
+6.7 Safety filter hai tng . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 8
+
+7 Reward paired relative to pure DLS           9
+
+7.1 Ti sao không dùng reward tuyt i . . . . . . . . . . . . . . . . . . . . . . . . . . . 9
+
+7.2 Success indicators . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 9
+
+7.3 Reward  xut . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 9
+
+7.4 Reward weights là hyperparameter, không phi kt lun lý thuyt . . . . . . . . . 10
+
+8 Quy trình hun luyn PPO                       10
+
+8.1 Training stream và fixed benchmark . . . . . . . . . . . . . . . . . . . . . . . . . . . 10
+
+8.2 Sampling theo failure mode . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 10
+
+8.3 PPO training loop . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 10
+
+8.4 Cu hình khi u . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 11
+
+8.5 TPE hyperparameter optimization . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 11
+
+9 Áp dng vào Dataset v2 hin ti                 12
+
+9.1 Tài sn d liu hin có . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 12
+
+9.2 Mapping field cho Point-IK environment . . . . . . . . . . . . . . . . . . . . . . . . . 12
+
+9.3 Vai trò ca tng split . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 12
+
+9.4 Primary application: Point-IK . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 13
+
+                                      i
+SR-PPO-DLS cho Kassow KR810          Báo cáo lý thuyt và phng án áp dng Dataset v2
+
+9.5 Secondary application: trajectory waypoint 0 . . . . . . . . . . . . . . . . . . . . . . 13
+9.6 Ti sao không PPO  mi waypoint . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 13
+
+10 Thit k thc nghim và ánh giá công bng          13
+
+10.1 Baselines bt buc . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 13
+
+10.2 Point-IK metrics . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 14
+
+10.3 Trajectory metrics . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 14
+
+10.4 Paired statistics . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 15
+
+10.5 Acceptance gates  xut . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 15
+
+11 Truy vt: thành phn nào áp dng t bài báo nào?  15
+
+12 Kin trúc source code  xut                     16
+
+12.1 Test bt buc . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 17
+
+13 Quy trình trin khai theo giai on              17
+
+14 Ri ro, gii hn và cách kim soát                17
+
+14.1 One-step PPO có th không cn critic mnh . . . . . . . . . . . . . . . . . . . . . . . 17
+
+14.2 Reward hacking qua fallback . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 18
+
+14.3 Memorization . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 18
+
+14.4 Action scale quá nh hoc quá ln . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 18
+
+14.5 Safety filter quá bo th . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 18
+
+14.6 Không suy rng sang robot tht . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 18
+
+15 Kt lun thit k                                 18
+
+                                     ii
+SR-PPO-DLS cho Kassow KR810                   Báo cáo lý thuyt và phng án áp dng Dataset v2
+
+1. Tóm tt iu hành
+
+  Quyt nh ã cht
+
+  Phng pháp tip theo ca project là SR-PPO-DLS: Safe Residual PPO-Guided DLS Ini-
+  tializer. PPO ch to mt hiu chnh khp có biên gii hn  chuyn qinitial sang mt seed
+  tt hn. Mt safety filter kim tra proposal và có quyn quay v seed gc. Sau ó, chính
+  locked DLS hin ti chu trách nhim hi t ti pose cui. Không phát trin Multistep PPO
+  trong phm vi phng pháp này.
+
+    Mc tiêu ca SR-PPO-DLS không phi thay th numerical IK. Mc tiêu là gii úng mt
+im yu ã c Dataset v2 o c: DLS rt nhy vi initial configuration và thng dng
+vì stagnation trong local basin. Trên frozen-test, locked DLS t standard Point-IK success
+khong 95.08%, nhng trajectory standard success ch khong 54.93% vi warm-start và 32.92%
+vi cold-start. Frozen run hoàn thành  171,600 DLS solves và không có non-finite result, nên
+vn  không phi li s hc nn tng mà là la chn basin/seed và descent cc b [7, 8].
+
+    Phng pháp  xut kt hp nm ngun ý tng:
+
+1. PPO-Clip cung cp thut toán hc policy liên tc n nh hn policy-gradient c bn [2].
+
+2. MPDIK cung cp gi thuyt trung tâm: PPO có th ci thin initial value, còn DLS cung cp
+     chính xác IK cui [1].
+
+3. Residual reinforcement learning cung cp cách phân rã: gi b gii c in mnh và
+    ch hc phn hiu chnh còn thiu [3].
+
+4. Safety layer cung cp nguyên tc chnh/projection action trc khi áp dng vào h thng
+    có ràng buc [4].
+
+5. TPE cho PPO trên robot 7-DOF cho thy hyperparameter optimization có th ci thin
+    áng k hiu nng và tc  hi t; vì vy action scale, learning rate, entropy và clip range
+    không nên c chn tùy ý [5].
+
+  im cn phân bit
+
+  Tên Safe Residual PPO-Guided DLS Initializer là mt kin trúc tng hp mi. Bài Yu và
+  Tan dùng PPO xen k DLS nhiu bc; Johannink et al. hc residual ca controller; Dalal
+  et al. dùng safety layer da trên mô hình tuyn tính. Project KR810 ch k tha nguyên tc
+  và iu chnh cho one-shot seed selection, không tuyên b ã tái to nguyên bn các thut
+  toán ó.
+
+2. Bài toán nghiên cu và phm vi
+
+2.1. Bài toán IK ca KR810
+
+Kassow KR810 có by bin khp ch ng:
+
+                             q = [q1, q2, . . . , q7]T  R7.        (1)
+
+Forward kinematics ánh x cu hình khp sang pose u công tác:
+
+                             T (q) = FK(q) =  R(q)  p(q)   SE(3),  (2)
+                                                0    1
+
+                                              1
+SR-PPO-DLS cho Kassow KR810                 Báo cáo lý thuyt và phng án áp dng Dataset v2
+
+trong ó p(q)  R3 và R(q)  SO(3). Bài toán IK nhn pose ích Td = (Rd, pd) và trng thái ban
+u qinitial, sau ó tìm q sao cho:
+
+                 pd - p(q)  p, (RdR(q)T )  o.                             (3)
+
+    Do task pose có sáu chiu trong khi robot có by khp, KR810 là redundant i vi task 6D.
+Mt pose có th tng ng nhiu nghim khp. Vì vy cht lng ca seed nh hng n
+nhánh nghim, tc  hi t, khong cách ti joint limit và kh nng tránh local basin.
+
+2.2. Phm vi úng ca báo cáo
+
+Báo cáo ch xét kinematics:
+  · target pose, FK, Jacobian và numerical IK;
+
+  · joint limits và singularity diagnostics;
+
+  · PPO hc mt residual seed;
+
+  · ánh giá Point-IK và nh hng ti trajectory warm-start.
+Không xét torque, actuator, controller, collision, payload, compliance, backlash, sensor noise
+hoc TCP ã hiu chun. Vì vy success trong báo cáo là success ca numerical IK trong Mu-
+JoCo model, không phi chng nhn  chính xác robot vt lý.
+
+2.3. Gi thuyt nghiên cu
+
+Gi thuyt chính
+
+Vi cùng target, cùng qinitial, cùng DLS config và cùng budget, mt policy PPO hc bounded
+residual có th to qseed làm tng xác sut hi t hoc gim s iteration ca DLS, trong khi
+safety filter gi degradation rate  mc rt thp.
+
+Ba gi thuyt kim chng:
+
+                 H1 : SuccessSR-PPO-DLS > SuccessDLS,                     (4)
+
+                 H2 : StagnationSR-PPO-DLS < StagnationDLS,               (5)
+
+                 H3 : DegradationRate = P (SB = 1, SH = 0) gn 0.          (6)
+
+3. Nn tng toán hc ca DLS
+
+3.1. Pose error
+
+Sai s v trí c nh ngha trong world frame:
+
+                             ep(q) = pd - p(q)  R3.                       (7)
+
+Sai s orientation dùng log map trên SO(3):
+
+                             eo(q) = Log RdR(q)T   R3.                    (8)
+
+Norm ca eo bng geodesic angle gia orientation hin ti và orientation ích:
+
+                             eo(q)2 =   [0, ].                            (9)
+
+Ghép hai phn thành task error sáu chiu:
+
+                             e(q) =         ep(q)   R6.                   (10)
+                                            eo(q)
+
+                                            2
+SR-PPO-DLS cho Kassow KR810                   Báo cáo lý thuyt và phng án áp dng Dataset v2
+
+3.2. Jacobian và xp x cc b
+
+Geometric Jacobian ca KR810 có kích thc:
+
+                             J(q) =       Jv (q)     R6×7.                  (11)
+                                          J (q)
+
+Vi thay i nh q, chuyn ng task-space c xp x bc nht:
+
+                                          x  J(q)q.                         (12)
+
+ây là nguyên nhân DLS là phng pháp local: Jacobian ch mô t tt vùng lân cn ca q hin
+ti. Nu seed  basin không thun li hoc target xa, chui cp nht có th gim li chm,
+chm limit hoc stagnate.
+
+3.3. Bài toán ti u DLS
+
+DLS tìm bc q bng cách cân bng task error và joint-step norm:
+
+                  q = arg min             W 1/2(J q - e)  2  +  2q22,       (13)
+                                                          2
+                                       q
+
+trong ó W  0 là trng s position/orientation và  > 0 là damping. iu kin cc tiu cho
+
+normal equation:
+
+                             (J T W J + 2I)q = J T W e                      (14)
+
+Solver dùng linear solve thay vì tính inverse trc tip. Damping làm gim h s khuch i
+ca các singular direction. Vi SVD J = U V T , h s DLS theo singular value i có dng:
+
+                                          i2  i  2  ,                       (15)
+                                              +
+
+thay cho 1/i ca pseudoinverse. Khi i  0, h s DLS vn hu hn, giúp n nh gn singu-
+larity [6].
+
+3.4. Adaptive damping và gii hn bc
+
+Damping c tng khi minimum singular value gim:
+
+(q) = f (min(J (q))),                        < 0 trong vùng near-singular.  (16)
+                                          min
+
+Sau khi gii, bc c clamp:
+
+                             qj  clip(qj, -qmax,j, qmax,j),                 (17)
+
+                             q(i+1) = clip q(i) + q, qmin, qmax .           (18)
+
+    Locked baseline hin ti là cand_D_pure_dls: adaptive damping, ti a 300 iterations,
+max joint step 0.1 rad, clip operational limits, joint-limit avoidance/null-space centering tt.
+Solver convergence dùng strict 1 mm/1; reporting còn có coarse 6 mm/5 và standard 3 mm/2
+[7, 8].
+
+                                              3
+SR-PPO-DLS cho Kassow KR810          Báo cáo lý thuyt và phng án áp dng Dataset v2
+
+3.5. Ti sao PPO cn ci thin seed thay vì thay DLS
+
+Nu DLS ã  trong basin tt, nó có  chính xác và numerical safety cao. Dataset v2 xác nhn
+0 non-finite trên frozen workload. Vn  ni bt là:
+
+  · cold-start thp hn warm-start rõ rt;
+  · stagnation áp o max-iteration;
+  · failure tails rt ln, cho thy solver ôi khi dng  basin hoàn toàn sai;
+  · tng iteration budget n thun không gii quyt descent plateau.
+Do ó, mt policy hc seed tt có ý ngha hn mt policy hc toàn b IK mapping.
+
+4. Nn tng toán hc ca PPO
+
+4.1. MDP cho one-shot initializer
+
+Mt task c mô t bi context:
+
+                             T = (qinitial, pd, Rd, diagnostics) .       (19)
+
+Episode one-shot có mt state s, mt action a, mt DLS execution và mt reward r. Vì ch có
+mt bc, bài toán gn contextual bandit; tuy nhiên PPO vn hu ích vì:
+
+· action là continuous 7D;
+
+· policy cn stochastic exploration;
+
+· PPO-Clip cho phép nhiu minibatch epochs trên rollout;
+
+· cùng policy architecture có th c gi n nh khi m rng observation hoc curriculum.
+
+4.2. Actor-Critic
+
+Actor tham s  nh ngha policy:
+
+                                     (a | s).                            (20)
+
+Vi continuous action, mt la chn tiêu chun là diagonal Gaussian:
+
+                               u  N µ(s), diag(2) ,                      (21)
+
+                             a = clip(u, -1, 1)  [-1, 1]7.               (22)
+
+Critic tham s  c lng:
+
+                                     V(s)  E[G | s].                     (23)
+
+Trong deterministic evaluation, dùng mean action a = clip(µ(s), -1, 1).
+
+Lu ý trin khai Gaussian
+
+Nu dùng action clipping nh Stable-Baselines3 PPO mc nh, log-probability phi c
+tính trên action trc clipping. T l action b clip cn c log; clipping quá nhiu là du
+hiu action scale hoc policy variance cha phù hp. Nu dùng tanh-squashed Gaussian
+tùy bin, phi có log-probability correction.
+
+                                     4
+SR-PPO-DLS cho Kassow KR810                       Báo cáo lý thuyt và phng án áp dng Dataset v2
+
+4.3. PPO clipped objective
+
+Policy ratio gia policy mi và policy dùng  thu rollout:
+
+                                   rt()   =     (at | st) .           (24)
+                                               old (at | st)
+
+Clipped surrogate objective:
+
+              LCLIP() = Et min rt()A^t, clip(rt(), 1 - , 1 + )A^t .   (25)
+
+Clip range  hn ch policy update quá ln. PPO alternates gia data collection và nhiu epochs
+minibatch optimization, to cân bng tt gia  n gin và sample efficiency [2].
+
+4.4. Advantage và value loss
+
+TD residual:
+
+                                t = rt + V(st+1) - V(st).             (26)
+
+Generalized Advantage Estimation:
+
+                                          T -t-1
+
+                                   A^t =          (GAE)lt+l.          (27)
+
+                                          l=0
+
+Vi one-shot episode và terminal sau action:
+
+                                A^ = r - V(s), G = r.                 (28)
+
+Loss tng dùng khi ti thiu hóa:
+
+              L(, ) = -LCLIP() + cV E(V(s) - G)2 - cH E[H((· | s))].  (29)
+
+Entropy bonus duy trì exploration; value loss giúp gim variance.
+
+5. Nguyên lý Residual và Safe trong SR-PPO-DLS
+
+5.1. Residual reinforcement learning
+
+Residual RL phân rã iu khin thành phn ã bit và phn hc:
+
+                                   u = ubase + uRL.                   (30)
+
+Johannink et al. dùng RL  hc phn residual b sung cho conventional controller, thay vì
+
+buc RL hc li toàn b cu trúc ã c controller gii tt [3]. Trong SR-PPO-DLS, s phân rã
+
+c iu chnh  mc seed:
+
+                                   qseed = qinitial + qPPO.           (31)
+
+DLS không phi thành phn cng trc tip vào action cùng thi im; DLS là downstream
+optimizer dùng seed ã chnh. Tinh thn residual vn gi nguyên: hc phn hiu chnh nh,
+bo toàn solver c in mnh.
+
+                                                  5
+SR-PPO-DLS cho Kassow KR810                      Báo cáo lý thuyt và phng án áp dng Dataset v2
+
+5.2. Safety layer và action projection
+
+Dalal et al.  xut thêm safety layer vào policy  sa action trc khi áp dng, bo m ràng
+buc continuous-action không b vi phm [4]. SR-PPO-DLS áp dng nguyên tc này theo hai
+tng:
+
+1. Hard projection: a seed vào operational joint range có safety margin.
+
+2. Acceptance gate: so sánh proposal vi seed gc bng diagnostics ch s dng thông tin
+    runtime; nu proposal ri ro, fallback v qinitial.
+
+    ây là adaptation cho IK, không phi safety layer óng-form ca Dalal. Nó không bo m
+safety ca robot vt lý; nó ch bo m các ràng buc kinematic và do-no-harm tng i trong
+simulation.
+
+5.3. Ti sao cn safety filter khi pure DLS ã mnh
+
+Vì Point-IK standard success frozen ã khong 95%, mt policy không có filter có th tng
+success trên mt s case khó nhng làm hng nhiu case DLS vn gii c. Do ó metric
+quan trng là degradation rate:
+
+                  DegradationRate = #{SB = 1, SH = 0} .                                                                                                                                            (32)
+                                                 N
+
+Safety filter h tr policy hc "không làm gì" khi proposal không to li ích áng tin cy.
+
+6. Kin trúc SR-PPO-DLS c  xut
+
+6.1. S  tng th
+
+ Task input       Feature builder    PPO Actor   Residual mapping    Safety filter  Locked DLS
+qinitial, pd, Rd  FK, ep, eo, mar-  a  [-1, 1]7            qproj   accept/fallback     qsolution
+                  gins, J, probe
+
+                                                                                                                                                                         Paired evaluator
+                                                                                                                                                           pure DLS result B vs hybrid result H
+
+                                                                                                                                                               success rescue/degradation, er-
+                                                                                                                                                            ror, iterations, runtime, action cost
+
+       Figure 1: Kin trúc SR-PPO-DLS. Ch seed thay i; locked DLS và target không i.
+
+6.2. Mt episode one-shot
+
+1. Sample mt task public: (qinitial, pd, Rd).
+2. Tính observation s.
+3. Actor sample action a.
+4. Map action thành bounded residual qPPO.
+5. Project candidate vào safe operational range.
+6. Safety filter accept proposal hoc fallback.
+7. Chy locked DLS t qseed.
+8. So sánh vi pure DLS baseline ca cùng task.
+9. Tính reward và kt thúc episode.
+
+                                                                  6
+SR-PPO-DLS cho Kassow KR810                Báo cáo lý thuyt và phng án áp dng Dataset v2
+
+6.3. Observation 36 chiu
+
+Observation cui cùng c  xut:
+
+                   s = q¯, e¯p, e¯o, mL, mU , ¯min, log(1 + ), qprobe  R36.               (33)
+
+Nhóm feature          Dim     Công thc/chun hóa Vai trò
+Joint state           7
+                              q¯j = 2(qj -qj,min)/(qj,max -    Cho policy bit posture và v
+Position error        3       qj,min) - 1                      trí trong joint range.
+                              e¯p = ep/sp                      Hng và  ln sai s tnh
+                                                               tin.
+Orientation error     3       e¯o = eo/                        Hng xoay ngn nht ti tar-
+                                                               get.
+Lower margins         7       mLj = (qj -qj,min)/(qj,max-      Bit khp nào gn lower limit.
+
+                              qj,min)
+                              mUj
+Upper margins         7                 =     (qj,max -        Bit khp nào gn upper limit.
+
+                              qj )/(qj,max - qj,min)
+
+Minimum singular 1            chun hóa bng statistics          Cho bit mc gn singularity.
+
+value                         training
+
+Condition number      1       log(1 + ) ri chun hóa            o             anisotropy/ill-
+
+                                                               conditioning ca Jacobian.
+
+DLS probe direction 7         mt DLS update cha áp             Cho policy bit DLS hin
+                              dng, chia max joint step
+                                                               mun i hng nào.
+
+Các field b cm
+
+Không a q_target_reference, q_reference, waypoint_reachable, future joint so-
+lution hoc protected conditioning fields vào observation. Chúng ch dùng chng minh
+target reachable. Dùng chúng s to label leakage và làm phép so sánh vi DLS không còn
+hp l [7, 8].
+
+6.4. DLS probe direction
+
+Probe dùng úng DLS single update ti seed gc:
+
+                              qprobe = J T W J + 2I -1 J T W e.                           (34)
+
+Nhng probe không c áp dng trc tip. Nó là feature giúp Actor hc residual so vi hng
+mà DLS ang  xut. ây là cách gim  khó hc: policy không cn t hc hoàn toàn inverse
+Jacobian t u.
+
+6.5. Action residual
+
+Actor xut normalized action:
+
+                                   a  [-1, 1]7.                                           (35)
+
+Residual theo range ca tng khp:
+
+                              qjPPO = j (qj,max - qj,min)aj .                             (36)
+
+Ban u có th dùng chung j = . Candidate seed:
+
+                                 qcand = qinitial + qPPO.                                 (37)
+
+Action bng zero luôn hp l:
+
+                                 a = 0  qcand = qinitial.                                 (38)
+
+ây là iu kin quan trng  policy hc do-no-harm.
+
+                                           7
+SR-PPO-DLS cho Kassow KR810                       Báo cáo lý thuyt và phng án áp dng Dataset v2
+
+6.6. Projection vào safe joint range
+
+t safety margin j  0:
+
+                      qproj,j = min qj,max - j , max(qj,min + j , qcand,j ) .  (39)
+
+Projection bo m proposal hu hn và nm trong operational range. Không nên dùng mt
+margin radian ging nhau cho mi khp nu ranges khác áng k; dùng t l range hoc config
+ã hiu chun trên development.
+
+6.7. Safety filter hai tng
+
+6.7.1. Tng 1: hard feasibility
+Reject proposal nu:
+
+  · có NaN/Inf;
+  · FK hoc Jacobian không hu hn;
+  · minimum joint-limit margin nh hn hard floor;
+  · projection distance quá ln, cho thy action thng xuyên p vào boundary.
+
+6.7.2. Tng 2: one-step probe gate
+
+nh ngha normalized weighted error:
+
+                      E(q)   =  wp  ep(q)  +  wo  eo(q) ,      wp + wo = 1.    (40)
+                                       sp            so
+
+Chy cùng mt micro-probe t hai seed:
+
+                                    qB+ = DLS1(qinitial, Td),                  (41)
+                                    qP+ = DLS1(qproj, Td).                     (42)
+
+Accept proposal khi:
+
+                                           E(qP+)  E(qB+) +                    (43)
+
+và margin không xu quá ngng. Seed cui:
+
+                      qseed =   qproj,     nu proposal c chp nhn,              (44)
+                                qinitial,  nu fallback.
+
+      0 cho phép proposal tm thi không tt hn local error mt chút, vì mt seed tt hn
+v basin không nht thit gim error ngay lp tc.  phi c tune trên development và khóa
+trc validation.
+
+Chi phí ca safety probe
+
+Safety probe to thêm compute. Báo cáo runtime phi tách: PPO inference, two-seed probe
+cost và full DLS cost. Không c báo ch runtime DLS ri b qua chi phí filter.
+
+                                                  8
+SR-PPO-DLS cho Kassow KR810                     Báo cáo lý thuyt và phng án áp dng Dataset v2
+
+7. Reward paired relative to pure DLS
+
+7.1. Ti sao không dùng reward tuyt i
+
+Nu reward ch là -EH , PPO có th nhn reward tt khi DLS t gii c task, dù action không
+óng góp. Reward phi so cùng task gia:
+
+                                    B = DLS(qinitial, Td),                       (45)
+                                    H = DLS(qseed, Td).                          (46)
+
+Trong ó B là baseline cache và H là hybrid result.
+
+7.2. Success indicators
+
+Vi reporting tier k  {coarse, standard, strict}:
+
+                              Sk = I [ep  p,k  eo  o,k] .                        (47)
+
+Standard 3 mm/2 là primary metric; strict 1 mm/1 là secondary precision metric.
+
+7.3. Reward  xut
+
+Mt reward rõ attribution:
+
+            r = cR(1 - SB)SH - cDSB(1 - SH )                                     (48)
+
+                      + cE clip(EB - EH , -1, 1)                                 (49)
+
+                      + cI I[SB = SH = 1] clip     IB - IH , -1, 1               (50)
+                                                     Imax
+
+                      - caa22 - cmm(qseed) - c(qseed) - cF I[fallback].          (51)
+
+Gii thích:
+
+· cR: rescue bonus khi pure DLS fail nhng hybrid success.
+
+· cD: degradation penalty khi pure DLS success nhng hybrid fail; nên ln hn cR.
+
+· cE: thng gim normalized final error.
+
+· cI : thng gim iteration ch khi c hai cùng success, tránh thng dng sm do stagnation.
+
+· ca: regularize action nh.
+
+· m: penalty gn joint limit.
+
+· : penalty nh near-singular; không quá mnh vì mt s target hp l có th yêu cu i
+  qua vùng xu.
+
+· fallback penalty nh giúp policy gim proposal vô ích nhng không c ln ti mc ép
+  accept proposal nguy him.
+
+Mt hàm limit penalty kh vi:
+
+                                  17     max      0, msafe - mj(q)      2        (52)
+                      m(q) = 7                            msafe                  (53)
+                                                                         .
+
+                                    j=1
+
+Singularity penalty:
+
+                             (q) =  max  0, safe - min(q)           2
+                                                   safe
+                                                                     .
+
+                                                9
+SR-PPO-DLS cho Kassow KR810               Báo cáo lý thuyt và phng án áp dng Dataset v2
+
+7.4. Reward weights là hyperparameter, không phi kt lun lý thuyt
+
+Không cht s cui trong tài liu. Development search cn tune ít nht:
+
+                             {cR, cD, cE, cI , ca, cm, c, cF , ,  }.  (54)
+
+TPE là la chn phù hp vì ã cho thy ci thin áng k vi PPO trên robot 7-DOF [5]. Tuy
+nhiên search space và objective phi pre-register, không dùng frozen.
+
+8. Quy trình hun luyn PPO
+
+8.1. Training stream và fixed benchmark
+
+Dataset v2 public có 1,200 development Point-IK samples. Lp vô hn trên 1,200 task có th
+dn n memorization. Phng án tt nht:
+
+  · gi Dataset v2 development/validation/frozen làm fixed benchmark;
+  · to SR-PPO training stream riêng bng cùng target-generation logic, seed namespace
+
+    mi;
+  · kim tra content hash không trùng c ba fixed splits;
+  · không lu hoc không expose qtarget_reference cho environment.
+
+    Training stream không làm thay i Dataset v2.0.0; nó là d liu hc riêng ca method.
+
+8.2. Sampling theo failure mode
+
+Uniform sampling có th b easy cases chi phi. Curriculum  xut:
+
+Stage  Task distribution                  Mc tiêu
+0
+1      near-target, easy, pure DLS        Hc a  0, gim degradation.
+2                                         Gi success, gim iterations/runtime.
+       success nhanh                      Hc rescue local basin.
+3
+4      pure DLS success nhng it-          Generalization toàn Point-IK distribution.
+                                          Kim tra initial branch nh hng toàn
+       eration cao                        ng.
+
+       stagnation,           far-target,
+
+       large-orientation, hard
+
+       initial
+
+       cân bng 6 difficulty
+
+       groups
+
+       waypoint 0 ca trajectory
+
+       development
+
+    Stage progression dùng stage-local budget và gate, không dùng global timestep n thun.
+Có rollback nu stage mi làm degradation tng.
+
+8.3. PPO training loop
+
+ for update in range(num_updates):
+        rollout = []
+        for env_step in range(rollout_size):
+                task = sample_training_task()
+                baseline = cached_pure_dls(task)
+                s = build_observation(task)
+
+                                          10
+SR-PPO-DLS cho Kassow KR810  Báo cáo lý thuyt và phng án áp dng Dataset v2
+
+       u, log_prob, value = actor_critic.sample(s)
+       a = clip(u, -1, 1)
+       q_proj = residual_projection(task.q_initial, a)
+       q_seed, fallback = safety_filter(task, q_proj)
+       hybrid = locked_dls(task.target_pose, q_seed)
+       reward = paired_reward(baseline, hybrid, a, fallback)
+       rollout.append(s, u, log_prob, value, reward)
+
+advantage, returns = one_step_advantage(rollout)
+for epoch in range(ppo_epochs):
+
+       for minibatch in shuffle(rollout):
+              optimize_clipped_policy_value_entropy(minibatch)
+
+8.4. Cu hình khi u
+
+Tham s                       Giá tr khi u  Ghi chú
+
+Policy                       PPO-Clip      Theo Schulman et al.
+Actor/Critic MLP             [256, 256]
+                                           Separate              networks
+Activation                   Tanh
+Learning rate                3 × 10-4      khuyn ngh.
+Clip range                   0.2
+Rollout size                 4096          Phù hp normalized state.
+Batch size                   256
+Epochs/rollout               10            Anneal/TPE sau smoke.
+                             1.0
+GAE                          1.0           Search 0.1­0.3.
+Entropy coefficient          10-3
+Value coefficient            0.5           Tng trên parallel envs.
+Max grad norm                0.5
+Parallel envs                8­16          Phi chia ht rollout.
+Training steps               600k khi u
+                                           Theo dõi approximate KL.
+Seeds                        5
+                                           One-shot terminal.
+
+                                           One-step advantage.
+
+                                           Anneal/TPE.
+
+                                           Cu hình khi u.
+
+                                           n nh update.
+
+                                           DLS ch yu CPU.
+
+                                           So vi paper MPDIK;
+
+                                           không phi m bo .
+
+                                           Báo mean, std và CI.
+
+8.5. TPE hyperparameter optimization
+
+Search trên training/development, không dùng validation/frozen:
+  · learning rate: 10-5 n 10-3 log-uniform;
+  · action scale : 0.01 n 0.12;
+  · clip range: 0.1 n 0.3;
+  · entropy: 10-5 n 10-2;
+  · hidden width: 128, 256, 512;
+  · batch: 128, 256, 512;
+  · safety tolerance  ;
+  · reward weights có constraint cD > cR.
+
+                             11
+SR-PPO-DLS cho Kassow KR810                   Báo cáo lý thuyt và phng án áp dng Dataset v2
+
+Shianifar et al. báo TPE ci thin success ca PPO 34.28 percentage points và rút ngn thi
+gian t 95% maximum reward 76% trong bài toán robot 7-DOF; kt qu này h tr quyt
+nh dùng systematic search thay vì hand-tuning [5].
+
+9. Áp dng vào Dataset v2 hin ti
+
+9.1. Tài sn d liu hin có
+
+Dataset v2.0.0 gm:
+  · 2,600 Tier-0 states: 1,000 FK, 1,000 Jacobian, 600 singularity;
+  · 6,000 Point-IK: 1,200 development, 1,200 validation, 3,600 frozen-test;
+  · 12 anchors: 6 regular, 3 near-limit, 3 near-singular;
+  · 120 core trajectories và 90 random-challenge trajectories;
+  · 210 trajectories, 400 waypoints mi trajectory, tng 84,000 canonical poses;
+  · 630 trials: easy, medium, hard; 210 trials mi split.
+
+Các protected references b loi khi public evaluation bundle, phù hp vi yêu cu chng
+leakage [7, 8].
+
+9.2. Mapping field cho Point-IK environment
+
+Environment ch c public fields:
+
+Field                        Cách dùng            Ghi chú
+
+q_initial                    state khi u          Không thay i gia pure DLS và hy-
+                                                  brid.
+target_position              pd                   Target Cartesian reachable.
+target_quaternion_wxyz       Rd                   Chuyn quaternion sang rotation ma-
+                                                  trix.
+difficulty_id/name           stratified sam-      Không a vào policy  baseline u,
+                             pling/report         tr ablation.
+sample_id                    paired join          Bo m so cùng task.
+Public covariates            phân tích, chun      Không dùng field có ngun t pro-
+                             hóa                  tected solution nu export policy
+                                                  cm.
+
+    Tuyt i không c protected qtarget_reference. Target ã c to bng FK ca mt q hp l,
+nhng policy ch nhìn pose target ging numerical IK thc t.
+
+9.3. Vai trò ca tng split
+
+      Independent       Development 1,200         Validation 1,200       Frozen 3,600
+    training stream      hyperparameters,          one-shot confir-       single final
+online/on-policy tasks  curriculum, ablation      mation after lock  method evaluation
+
+                        Figure 2: Protocol  xut cho SR-PPO-DLS.
+
+1. Training stream: update PPO weights.
+
+                                              12
+SR-PPO-DLS cho Kassow KR810         Báo cáo lý thuyt và phng án áp dng Dataset v2
+
+2. Development: TPE, reward tuning, action scale, safety threshold, checkpoint selection,
+    ablation.
+
+3. Validation: chy xác nhn úng mt cu hình ã khóa; không retune.
+
+4. Frozen: sau code/config/model fingerprint lock, chy final paired evaluation. Existing
+    pure-DLS frozen artifact c dùng làm baseline c nh.
+
+    Vì frozen public release ã tn ti, project phi t enforce method-specific no-retune: ghi
+lock bundle trc ln chy SR-PPO-DLS frozen, log access và cm mi thay i sau khi xem kt
+qu.
+
+9.4. Primary application: Point-IK
+
+Mi public Point-IK sample to mt one-shot episode. Paired evaluation:
+
+                             (qinitial, Td) -p-u-r-e -D-LS B,                      (55)
+
+(qinitial, Td) -P-P-O-+-f-ilt-er qseed -s-am--e-D-LS H.                            (56)
+
+Ch khác seed. DLS config, target, tolerance và max iterations ging nhau.
+
+9.5. Secondary application: trajectory waypoint 0
+
+SR-PPO-DLS là initializer, nên trajectory application phù hp nht là:
+
+                             qinitial -S-R---P-P-O---D-LS--at-w-a-y-p-oi-n-t0 q0,  (57)
+
+qk = DLSwarm(qk-1, Td,k), k = 1, . . . , 399.                                      (58)
+
+Không gi PPO li  waypoint 1­399. Thit k này tr li câu hi sch:
+
+Mt seed/branch tt hn ti waypoint u có ci thin toàn b chui warm-start
+hay không?
+
+    Mi split có 70 trajectories và 210 easy/medium/hard trials. So sánh:
+  · baseline warm-start DLS;
+  · SR-PPO-DLS ti waypoint 0 + warm-start DLS cho phn còn li.
+Không thay target trajectory, waypoint count, qinitial hoc reporting thresholds.
+
+9.6. Ti sao không PPO  mi waypoint
+
+Gi PPO mi waypoint s thay i bài toán t initializer thành repeated residual controller,
+tng compute và làm attribution khó. User ã cht không phát trin Multiple PPO, vì vy
+method chính thc ch can thip mt ln ti task start/trajectory start.
+
+10. Thit k thc nghim và ánh giá công bng
+
+10.1. Baselines bt buc
+
+                                    13
+SR-PPO-DLS cho Kassow KR810             Báo cáo lý thuyt và phng án áp dng Dataset v2
+
+Method                          Mc ích
+
+Pure DLS                        Locked official baseline.
+Random residual + DLS           Kim tra li ích có ch n t perturbation ngu nhiên.
+DLS-probe heuristic seed +      Baseline không hc, dùng chính probe direction.
+DLS
+PPO residual không safety fil-  Ablation ca thành phn Safe.
+ter + DLS
+PPO residual không DLS          Ablation observation.
+probe feature + DLS
+SR-PPO-DLS full                 Phng pháp  xut.
+
+10.2. Point-IK metrics
+
+Báo cáo theo split và 6 difficulty groups:
+  · coarse/standard/strict success rate;
+  · rescue count và degradation count;
+  · net success gain;
+  · position/orientation median, P95, max;
+  · DLS iterations median, P95;
+  · failure reason counts, c bit stagnation;
+  · PPO action norm và clipping rate;
+  · safety fallback rate;
+  · minimum joint-limit margin và min;
+  · runtime PPO, filter, DLS, total P50/P95/P99;
+  · non-finite count.
+
+10.3. Trajectory metrics
+
+Vi waypoint-0 initializer:
+  · waypoint standard success rate;
+  · position/orientation RMSE, P95, max;
+  · first failure location và maximum failure streak;
+  · recovery rate;
+  · cross-track RMSE/P95;
+  · final progress ratio và coverage;
+  · path-length ratio;
+  · maximum joint jump, total joint variation, velocity/jerk;
+  · runtime total cho c trajectory.
+
+                                        14
+SR-PPO-DLS cho Kassow KR810                 Báo cáo lý thuyt và phng án áp dng Dataset v2
+
+10.4. Paired statistics
+
+Vì hai method dùng cùng sample, dùng paired analysis. Vi success difference di = SH,i - SB,i:
+
+                                            1N       di.                             (59)
+                                p^ =
+                                        N       i=1
+
+Dùng paired bootstrap theo sample/trial  to 95% confidence interval. Vi binary discordant
+pairs, McNemar test có th kim tra rescue vs degradation:
+
+                             2  =    (|n01  -   n10| -    1)2                        (60)
+                                                              ,
+                                     n01 + n10
+
+trong ó n01 là baseline fail/hybrid success và n10 là baseline success/hybrid fail.
+
+10.5. Acceptance gates  xut
+
+Các gate phi c pre-register trên development trc validation:
+1. standard success improvement có paired bootstrap CI 95% không ct 0;
+2. degradation rate di ngng khóa;
+3. rescue count ln hn degradation count vi margin rõ;
+4. không tng non-finite;
+5. runtime P99 và fallback rate nm trong budget khóa;
+6. improvement không ch n t mt difficulty group duy nht;
+7. trajectory waypoint-0 experiment không làm joint jump hoc smoothness xu áng k.
+
+  Không dùng reward làm kt qu
+  Training reward ch là tín hiu ti u. Kt lun khoa hc phi da trên paired success,
+  error tails, iterations, stagnation, runtime và trajectory metrics ging baseline DLS.
+
+11. Truy vt: thành phn nào áp dng t bài báo nào?
+
+Thành phn SR-PPO- Ngun chính                              Cách project áp dng/iu chnh
+DLS
+                                                          Dùng PPO-Clip cho continuous 7D
+PPO clipped objective Schulman et al. [2]                 residual action, minibatch epochs và
+                                                          actor-critic.
+PPO giúp DLS bng ini- Yu và Tan [1]                       Gi ý tng PPO ci thin seed,
+tial value                                                DLS tinh chnh pose. Khác paper:
+                                                          project dùng one-shot, không alter-
+Residual action          Johannink et al. [3]             nating multistep.
+                                                          Gi base solver và hc bounded cor-
+                                                          rection. iu chnh residual t con-
+                                                          troller output sang joint-space seed.
+
+                                            15
+SR-PPO-DLS cho Kassow KR810  Báo cáo lý thuyt và phng án áp dng Dataset v2
+
+Thành phn SR-PPO- Ngun chính                    Cách project áp dng/iu chnh
+DLS
+Safety filter/action cor- Dalal et al. [4]      K tha nguyên tc safety layer.
+rection                                         Project dùng joint projection + DLS
+                                                probe acceptance/fallback, không
+TPE hyperparameter Shianifar et al. [5]         dùng learned linear constraint model
+optimization                                    nguyên bn.
+                                                Tune action scale, learning rate, en-
+DLS regularization Buss và Kim [6]              tropy, clip range, network và safety
+near singularity                                tolerance trên development.
+                                                Gii thích damping filter singular di-
+Dataset split, anti- Project Dataset v2 [7, 8]  rections; locked solver vn là thành
+leakage, frozen proto-                          phn precision.
+col                                             Train/tune không dùng protected ref-
+                                                erence; paired evaluation trên public
+                                                dev/val/frozen.
+
+Tuyên b ngun úng
+
+Không có bài báo nào mô t chính xác toàn b SR-PPO-DLS nh tài liu này. Phng pháp
+là mt synthesis có truy vt: PPO t Schulman, PPO-DLS initialization t Yu và Tan, resid-
+ual decomposition t Johannink, safety action correction t Dalal, TPE t Shianifar, và
+protocol/dataset t project KR810.
+
+12. Kin trúc source code  xut
+
+Không sa các module DLS/kinematics ã khóa. Thêm package mi:
+
+ mpdik_kassow/
+   sr_ppo_dls/
+       observation.py
+       residual_action.py
+       safety_filter.py
+       paired_reward.py
+       baseline_cache.py
+       fingerprints.py
+   envs/
+       kr810_sr_ppo_dls_env.py
+   configs/
+       sr_ppo_dls_config.json
+   pipelines/
+       build_sr_ppo_training_stream.py
+       cache_pure_dls_pointik.py
+       train_sr_ppo_dls.py
+       validate_sr_ppo_dls.py
+       evaluate_sr_ppo_dls_frozen.py
+   evaluation_v2/
+       sr_ppo_point_eval.py
+       sr_ppo_trajectory_init_eval.py
+   tests/
+         test_sr_ppo_observation.py
+         test_sr_ppo_safety_filter.py
+         test_sr_ppo_no_protected_fields.py
+
+                                                                 16
+SR-PPO-DLS cho Kassow KR810          Báo cáo lý thuyt và phng án áp dng Dataset v2
+
+ test_sr_ppo_paired_reward.py
+ test_sr_ppo_dls_lock_integrity.py
+
+12.1. Test bt buc
+
+  · observation shape = 36, finite, deterministic;
+  · action zero tr úng qinitial;
+  · projection không vt operational limits;
+  · safety fallback luôn tr seed hp l;
+  · protected keys b runtime guard t chi;
+  · DLS config hash trc/sau SR-PPO ging nhau;
+  · paired reward: rescue positive, degradation negative;
+  · cache baseline khp direct DLS rerun;
+  · deterministic evaluation dùng Actor mean;
+  · frozen pipeline t chi chy nu model/config cha lock.
+
+13. Quy trình trin khai theo giai on
+
+Phase  Công vic                      Gate u ra
+A
+       Aggregate DLS failures theo   Bng stagnation, iterations, success, margin,
+B      difficulty/init               min.
+       Build independent PPO train-  Anti-leakage pass; targets reachable; protected
+C      ing stream                    fields absent.
+D      Baseline cache                Recompute audit pass; config hash locked.
+       Environment + observa-        Unit tests pass; random policy không to non-
+E      tion/action/filter            finite.
+F      Stage 0 do-no-harm training   Degradation thp; action gn zero trên easy.
+       High-iteration/stagnation     Rescue tng trên development.
+G      curriculum
+H      TPE + multi-seed selection    Cu hình n nh, không chn theo mt seed.
+       Validation confirmation       Mt model/config lock; không retune sau vali-
+I                                    dation.
+J      Trajectory waypoint-0 test    o nh hng ti 400-waypoint warm-start.
+       Frozen final                  Paired report, fingerprints, no-retune state-
+                                     ment.
+
+14. Ri ro, gii hn và cách kim soát
+
+14.1. One-step PPO có th không cn critic mnh
+
+Vì episode ch mt bc, PPO gn contextual bandit. Critic vn giúp baseline variance nhng
+có th không to li ích ln. Cn ablation vi:
+
+  · PPO full actor-critic;
+
+                                                                 17
+SR-PPO-DLS cho Kassow KR810  Báo cáo lý thuyt và phng án áp dng Dataset v2
+
+  · REINFORCE/bandit baseline;
+  · supervised ranking seed proposer nu có label t candidate search ch trên training stream.
+Phng pháp ã cht vn là PPO; ablation giúp chng minh la chn thut toán.
+
+14.2. Reward hacking qua fallback
+
+Policy có th to proposal tùy ý ri da vào fallback  không b pht. Gii pháp:
+  · log fallback rate;
+  · penalty fallback nh;
+  · gate checkpoint nu fallback quá cao;
+  · ánh giá proposal quality trc filter nh diagnostic.
+
+14.3. Memorization
+
+Lp 1,200 development tasks có th khin policy nh task. Gii pháp là independent online
+training stream, content-hash anti-leakage và random target generation theo cùng distribu-
+tion.
+
+14.4. Action scale quá nh hoc quá ln
+
+Nu  quá nh, policy không i basin. Nu quá ln, policy gây branch switching và projection
+clipping. Vì vy  là hyperparameter trng yu và phi c TPE/tune theo rescue-degradation
+objective.
+
+14.5. Safety filter quá bo th
+
+ quá nh khin filter fallback gn nh luôn, SR-PPO-DLS tr thành pure DLS.  quá ln gim
+do-no-harm. Báo cáo phi công b acceptance/fallback rate và improvement conditional on
+accepted proposals.
+
+14.6. Không suy rng sang robot tht
+
+Ngay c khi SR-PPO-DLS tng numerical IK success, robot tht còn ph thuc calibration, ac-
+tuator, controller, payload, speed và collision. Phng pháp hin ti không gii các vn 
+ó.
+
+15. Kt lun thit k
+
+  Kin trúc cui cùng
+
+                 qinitial -P-P-O-b-o-u-nd-e-d-r-e-si-du-al qproj -s-a-fe-ty--ac-c-ep-t-/f-al-lb-a-ck qseed -l-oc-k-e-d-D-LS qsolution
+
+    SR-PPO-DLS phù hp vi trng thái project vì:
+1. locked DLS ã c xác minh và rt mnh  Point-IK;
+2. Dataset v2 cho thy initialization sensitivity và stagnation là khong trng nh lng rõ;
+
+                             18
+SR-PPO-DLS cho Kassow KR810  Báo cáo lý thuyt và phng án áp dng Dataset v2
+
+3. residual action gim  khó so vi PPO-only;
+
+4. safety filter bo v các case DLS vn thành công;
+
+5. paired reward cô lp óng góp tht ca PPO;
+
+6. public/protected split và frozen protocol cho phép evaluation công bng.
+
+    Phng pháp c áp dng trc  6,000 Point-IK benchmark và sau ó  waypoint u
+ca mi trajectory. PPO không c gi lp li dc 400 waypoint; phn còn li tip tc warm-
+start locked DLS. Kt qu ch c chp nhn khi rescue tng, degradation thp, runtime c
+báo y  và improvement tn ti trên validation/frozen, không ch trên training reward.
+
+                             19
+SR-PPO-DLS cho Kassow KR810      Báo cáo lý thuyt và phng án áp dng Dataset v2
+
+References
+
+[1] S. Yu and G. Tan, "Inverse Kinematics of a 7-Degree-of-Freedom Robotic Arm Based
+     on Deep Reinforcement Learning and Damped Least Squares," IEEE Access, 2024, doi:
+     10.1109/ACCESS.2024.3521539.
+
+[2] J. Schulman, F. Wolski, P. Dhariwal, A. Radford, and O. Klimov, "Proximal Policy Optimiza-
+     tion Algorithms," arXiv preprint arXiv:1707.06347, 2017, doi: 10.48550/arXiv.1707.06347.
+
+[3] T. Johannink et al., "Residual Reinforcement Learning for Robot Control," 2019 In-
+     ternational Conference on Robotics and Automation (ICRA), 2019, doi: 10.1109/I-
+     CRA.2019.8794127.
+
+[4] G. Dalal, K. Dvijotham, M. Vecerik, T. Hester, C. Paduraru, and Y. Tassa, "Safe Ex-
+     ploration in Continuous Action Spaces," arXiv preprint arXiv:1801.08757, 2018, doi:
+     10.48550/arXiv.1801.08757.
+
+[5] J. Shianifar, M. Schukat, and K. Mason, "Optimizing Deep Reinforcement Learning for
+     Adaptive Robotic Arm Control," in Highlights in Practical Applications of Agents, Multi-
+     Agent Systems, and Digital Twins: The PAAMS Collection, Springer, 2025, pp. 293­304, doi:
+     10.1007/978-3-031-73058-0_24.
+
+[6] S. R. Buss and J.-S. Kim, "Selectively Damped Least Squares for Inverse Kinematics," Jour-
+     nal of Graphics Tools, vol. 10, no. 3, pp. 37­49, 2005, doi: 10.1080/2151237X.2005.10129202.
+
+[7] MPDIK Kassow Project, "Current DLS Problem and Dataset Audit ­ Kassow KR810,"
+     CHATGPT_DLS_CURRENT_STATE_BRIEF.md, branch feature/dataset-v2, commit
+     151ffd76, 2026.
+
+[8] MPDIK Kassow Project,        "Dataset v2 ­ Implementation Log,"
+
+V2_IMPLEMENTATION_LOG.md, 2026.
+
+                                 20
+

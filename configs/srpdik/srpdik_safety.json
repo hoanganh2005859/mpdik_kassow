@@ -1,0 +1,27 @@
+{
+  "description": "SR-PPO-DLS two-layer safety filter lock (PDF section 6.7, eq. 40-44).",
+  "implementation_status": "CONFIGURED",
+  "layer_1_hard_feasibility": {
+    "floor_values": "dev-tuned in a later phase, not fixed in Phase 1",
+    "rejects_below_min_joint_limit_margin_floor": true,
+    "rejects_excessive_projection_distance": true,
+    "rejects_non_finite_fk_or_jacobian": true
+  },
+  "layer_2_one_step_probe_gate": {
+    "accept_condition": "E(q_P+) <= E(q_B+) + epsilon AND margin does not worsen past threshold",
+    "epsilon_and_margin_threshold": "dev-tuned then locked before validation, not fixed in Phase 1",
+    "fallback": "q_initial",
+    "probe_from": [
+      "q_initial",
+      "q_proj"
+    ],
+    "probe_source": "kinematics.dls_solver.dls_single_update"
+  },
+  "method_version": "0.1.0-phase1",
+  "runtime_cost_reporting": {
+    "full_dls_solve": "report separately",
+    "ppo_inference": "report separately",
+    "two_seed_probe": "report separately"
+  },
+  "schema_version": "1.0.0"
+}

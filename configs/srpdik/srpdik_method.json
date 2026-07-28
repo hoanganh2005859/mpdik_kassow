@@ -1,0 +1,23 @@
+{
+  "description": "SR-PPO-DLS overall method/pipeline lock: PPO proposes a bounded residual seed correction for the immutable, locked pure-DLS solver (cand_D_pure_dls); the DLS solver itself is never modified or retuned.",
+  "implementation_status": "CONFIGURED",
+  "locked_dls_candidate_ref": "configs/srpdik/dls_locked.json",
+  "method_version": "0.1.0-phase1",
+  "pipeline_stages": [
+    "q_initial",
+    "ppo_bounded_residual_action",
+    "seed_projection_safe_joint_range",
+    "safety_filter_two_layer",
+    "q_seed",
+    "locked_dls_solve",
+    "q_solution"
+  ],
+  "schema_version": "1.0.0",
+  "scope": {
+    "dynamics_actuator_controller_torque_collision": false,
+    "mappo": false,
+    "multistep_ppo": false,
+    "one_shot_ppo_residual": true,
+    "real_robot_or_iso_certification_claims": false
+  }
+}

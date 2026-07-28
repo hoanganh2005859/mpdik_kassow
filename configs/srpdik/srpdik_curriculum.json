@@ -1,0 +1,30 @@
+{
+  "description": "SR-PPO-DLS curriculum stage lock (PDF section 8.2, 5-stage table). No stage scheduling is implemented in Phase 1.",
+  "implementation_status": "PLANNED",
+  "method_version": "0.1.0-phase1",
+  "progression_policy": "stage-local budget + gate, with rollback if degradation rises",
+  "schema_version": "1.0.0",
+  "stage_budgets_and_gates": "dev-tuned in a later phase, not fixed here",
+  "stages": [
+    {
+      "focus": "near-target/easy: learn a approx 0 / reduce degradation",
+      "stage": 0
+    },
+    {
+      "focus": "fast-success cases: preserve success, cut iterations/runtime",
+      "stage": 1
+    },
+    {
+      "focus": "stagnation/far-target/large-orientation/hard-initial: learn basin rescue",
+      "stage": 2
+    },
+    {
+      "focus": "balanced across 6 difficulty groups: generalize over full Point-IK distribution",
+      "stage": 3
+    },
+    {
+      "focus": "trajectory waypoint-0 development set: measure effect on the whole warm-start chain",
+      "stage": 4
+    }
+  ]
+}

@@ -1,0 +1,19 @@
+{
+  "action_dim": 7,
+  "action_range": [
+    -1.0,
+    1.0
+  ],
+  "alpha_scale_initial_form": "shared_scalar",
+  "description": "SR-PPO-DLS residual action + seed-projection lock (PDF sections 6.5-6.6, eq. 35-39).",
+  "do_no_harm_invariant": "a == 0 implies q_cand == q_initial",
+  "implementation_status": "CONFIGURED",
+  "method_version": "0.1.0-phase1",
+  "projection": {
+    "formula": "q_proj_j = clip(q_cand_j, q_j_min + delta_j, q_j_max - delta_j)",
+    "margin_delta_policy": "per-joint, range-relative (not one shared radian value across all joints)",
+    "margin_values": "dev-tuned in a later phase, not fixed in Phase 1"
+  },
+  "residual_formula": "delta_q_j = alpha_j * (q_j_max - q_j_min) * a_j",
+  "schema_version": "1.0.0"
+}

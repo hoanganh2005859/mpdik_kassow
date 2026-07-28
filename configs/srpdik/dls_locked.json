@@ -1,0 +1,73 @@
+{
+  "adaptive_damping_policy": "compute_adaptive_damping (kinematics/adaptive_damping.py): lambda(sigma_min) = lambda_min if sigma_min >= threshold, else lambda_max - (lambda_max - lambda_min) * (sigma_min / threshold)^2; continuous at threshold, monotonically non-increasing in sigma_min, clipped to [lambda_min, lambda_max]",
+  "candidate_name": "cand_D_pure_dls",
+  "clipping_policy": "clip_to_operational_limits = true (kinematics/joint_limit_utils.clip_to_operational_limits, elementwise clip into [operational_lower_rad, operational_upper_rad]); applied only after a joint-limit violation is detected post-step, never implicitly",
+  "coarse_standard_strict_thresholds": {
+    "coarse": {
+      "orientation_deg": 5.0,
+      "position_m": 0.006
+    },
+    "standard": {
+      "orientation_deg": 2.0,
+      "position_m": 0.003
+    },
+    "strict": {
+      "orientation_deg": 1.0,
+      "position_m": 0.001
+    }
+  },
+  "description": "Immutable snapshot of the locked pure-DLS candidate (cand_D_pure_dls) that SR-PPO-DLS builds on top of. This file records source/config hashes and resolved solver parameters as of the snapshot commit; it is never regenerated to match a later commit without a new, explicit re-lock decision.",
+  "end_effector_site": "ee_site",
+  "immutable": true,
+  "jacobian_frame": "world (space frame); kinematics/jacobian.py::geometric_jacobian_world via mujoco.mj_jacSite, restricted to the resolved dof addresses of joint_1..joint_7",
+  "joint_limit_policy": "joint_limit_avoidance = false, null_space_gain = 0.0 (cand_D_pure_dls isolates the pure DLS term by disabling the null-space joint-centering secondary task that other candidates use)",
+  "lambda_maximum": 0.2,
+  "lambda_minimum": 0.0001,
+  "lock_format_version": "1.0.0",
+  "maximum_iterations": 300,
+  "maximum_joint_step_rad": 0.1,
+  "method_version": "0.1.0-phase1",
+  "minimum_relative_improvement": 0.001,
+  "orientation_weight": 0.2,
+  "pose_error_convention": "position_error = target_position - current_position (Euclidean, meters); orientation_error = Log(R_target @ R_current.T)^vee (SO(3) logarithm map, radians); full 6-vector ordering is [position_x, position_y, position_z, rotation_x, rotation_y, rotation_z] (kinematics/pose_error.py::full_pose_error)",
+  "pose_error_frame": "world (left/space frame); body-frame Log(R_current.T @ R_target)^vee is numerically different and must not be mixed with the world-frame Jacobian without an explicit conversion",
+  "position_weight": 1.0,
+  "resolved_parameters": {
+    "clip_to_operational_limits": true,
+    "damping_mode": "adaptive",
+    "joint_limit_avoidance": false,
+    "lambda_default": 0.01,
+    "lambda_max": 0.2,
+    "lambda_min": 0.0001,
+    "max_iterations": 300,
+    "max_joint_step_rad": 0.1,
+    "null_space_gain": 0.0,
+    "orientation_success_threshold_deg": 1.0,
+    "orientation_weight": 0.2,
+    "position_success_threshold_m": 0.001,
+    "position_weight": 1.0,
+    "singularity_sigma_threshold": 0.03,
+    "step_scale": 1.0
+  },
+  "schema_version": "1.0.0",
+  "singularity_sigma_threshold": 0.03,
+  "snapshot_git_commit": "0c6dcf0768f2ff4f142ccf572a4518684846b183",
+  "snapshot_timestamp_utc": "2026-07-28T09:06:28+00:00",
+  "source_code_files": {
+    "assets/kr810.xml": "b39637272dbb4bc2797e1203d3cc3d2fe75584c2c5c3d9d4f707533f76aae28e",
+    "configs/robot_config.json": "b5e260671f7f5c26e622c39540ae8e591d5b0a52a00b2ecbb6387c52b14cdf2c",
+    "evaluation_v2/candidate_configs.py": "7307582c970918480e00b39564c39a4146c56b19a740062e9e2b758c28e2fff8",
+    "kinematics/adaptive_damping.py": "a4a984cfbdd2ed271ad9375a5c8bc26cb24df29a8d56bacceab23c65fbaf9de7",
+    "kinematics/dls_solver.py": "c0145a2c42ee6203b286a0885cdae408b166f29969ae9c2f37307107bc17398c",
+    "kinematics/forward_kinematics.py": "aed830ead699a793221166f6d35ee025c50c1a6f1be4016473d2bb9a9d3e58df",
+    "kinematics/jacobian.py": "e7c8f21ad16cbe6370e44e40fe244b8d4d12f977237785c1cded7f4378c5bc8b",
+    "kinematics/joint_limit_utils.py": "35f4aeb01b622fc9a7bf05e1b41ad9832ae9abdf4b5483b12cc344346e87476a",
+    "kinematics/model_loader.py": "50cd797442dabf331de525569c1b5481d18ff1527cabe3e09d9c151ca43430b3",
+    "kinematics/pose_error.py": "ea944c27c6831210d2c295015af2d833de29a28c0609aa1e76abcace78846114",
+    "kinematics/rotation_utils.py": "77d3a2c9124919ab6a31e709fbd6b8b98518369a7739fb7de078cafef257a852",
+    "kinematics/singularity_metrics.py": "03247cff75e0216558e7c2f201d28da0b86f19a87c4b13bcab9451320e450db1"
+  },
+  "source_config_relative_path": "evaluation_v2/candidate_configs.py",
+  "source_config_sha256": "7307582c970918480e00b39564c39a4146c56b19a740062e9e2b758c28e2fff8",
+  "stagnation_window": 5
+}

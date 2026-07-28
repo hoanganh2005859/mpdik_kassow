@@ -1,0 +1,44 @@
+{
+  "dataset_v2_data_root_policy": "always an explicit, caller-supplied dataset_root; never hardcoded, never CWD-implicit, never baked into this config",
+  "description": "SR-PPO-DLS dataset/split access policy lock (PDF sections 8.1, 9.1-9.3). Enforced at runtime by srpdik.data.split_guard.",
+  "implementation_status": "CONFIGURED",
+  "leakage_policy": {
+    "allowed_environment_fields": [
+      "q_initial",
+      "target_position",
+      "target_quaternion_wxyz",
+      "difficulty_id",
+      "difficulty_name",
+      "sample_id"
+    ],
+    "forbidden_fields": [
+      "q_target_reference",
+      "q_reference",
+      "q_source_reference",
+      "waypoint_reachable",
+      "position_reconstruction_error_m",
+      "orientation_reconstruction_error_rad"
+    ],
+    "guard_reference": "evaluation_v2.protected_guard.assert_no_protected_fields (or an srpdik-local equivalent)"
+  },
+  "method_version": "0.1.0-phase1",
+  "schema_version": "1.0.0",
+  "splits": {
+    "development": {
+      "access": "allowed",
+      "role": "TPE/reward tuning/curriculum/ablation/checkpoint selection"
+    },
+    "frozen_test": {
+      "access": "denied",
+      "role": "single final paired evaluation after fingerprint lock (not this phase)"
+    },
+    "train": {
+      "access": "allowed",
+      "role": "srpdik-internal training stream, independent seed namespace"
+    },
+    "validation": {
+      "access": "requires_explicit_authorization",
+      "role": "single confirmation run of a locked config, no retuning"
+    }
+  }
+}
