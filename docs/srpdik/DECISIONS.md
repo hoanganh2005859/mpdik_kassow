@@ -36,11 +36,14 @@ Only decisions that are locked. Not a log — see `SRPDIK_IMPLEMENTATION_LOG.md`
    certification claims. Source: PDF §1/§2.2/§9.6/§14.6 and CLAUDE.md project scope.
 8. **This phase (Phase 0) implements no algorithm or training code** — only PDF ingestion,
    audit, and handoff docs, per this prompt's explicit instruction.
-9. **Baseline success-rate figures need reconciliation before being quoted in any report**: PDF
-   p.1 states standard Point-IK frozen success ≈95.08%; `docs/CHATGPT_DLS_CURRENT_STATE_BRIEF.md`
-   states dev/val/frozen = 0.963/0.963/0.951. Treat as the same underlying number (rounding
-   difference); re-derive exactly from `final_dls_summary.json` in Phase B before citing either
-   figure in a locked report.
+9. **Baseline success-rate figures need reconciliation before being quoted in any report** —
+   **RESOLVED in Phase 1A**. PDF p.1's "≈95.08%" and `docs/CHATGPT_DLS_CURRENT_STATE_BRIEF.md`'s
+   "0.951 frozen" are the same underlying number,
+   `final_dls_summary.json::frozen_test.point_ik.success_standard = 0.9508333333333333`
+   (= 3423/3600), displayed at different rounding precision — not a real discrepancy.
+   Development = 0.9633333333333334 (1156/1200), validation = 0.9625 (1155/1200), both
+   cross-checked exactly against `point_metrics.csv::group=overall,success_count_standard`. Full
+   reconciliation table: `docs/srpdik/SRPDIK_DLS_BASELINE_FAILURE_ANALYSIS.md` §3.
 10. **Phase renumbering (explicit user override, this session)**: the Phase 0 handoff
     (`HANDOFF.md`, `PHASE_STATUS.json`, `NEXT_COMMANDS.md` PROMPT 1) had queued the locked
     `SRPDIK_IMPLEMENTATION_PLAN.md` ordering `0 → A (read-only frozen failure-mode/success-rate
@@ -60,3 +63,14 @@ Only decisions that are locked. Not a log — see `SRPDIK_IMPLEMENTATION_LOG.md`
     algorithm behavior decision from the original plan (DLS lock target = `cand_D_pure_dls`,
     36-D observation, 7-D residual action, paired baseline, leakage policy, out-of-scope list,
     etc.) is changed by this renumbering — only phase *order/naming* changes.
+11. **Phase 1A validation-split read access, interpreted as explicitly authorized** (this
+    session). `configs/srpdik/srpdik_data.json::splits.validation.access =
+    "requires_explicit_authorization"` gates validation-split reads behind explicit authorization.
+    Phase 1A's governing prompt itself lists "validation summaries" in its §3 allowed-source list
+    for read-only failure-mode analysis. This is treated as that explicit authorization for
+    Phase 1A's read-only analysis only (`point_metrics.csv`, `point_failures.csv`,
+    `trajectory_trial_summaries.csv`, `waypoint_results.csv`, `trajectory_metrics.csv` under
+    `mpdik_kassow_v2_eval_devval/validation/cand_D_pure_dls/`) — it does not authorize validation
+    access for any other purpose (generator design, threshold tuning, model selection), which
+    remains gated by the same config flag. `frozen_test` remains fully denied throughout; see
+    `docs/srpdik/SRPDIK_DLS_BASELINE_FAILURE_ANALYSIS.md` §1.

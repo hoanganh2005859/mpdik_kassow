@@ -31,3 +31,20 @@
 
 No dataset v1 or v2 generated artifacts were created, modified, or read-written this phase.
 No training run occurred. No frozen_test split was accessed.
+
+## Phase 1A (locked DLS failure-mode analysis and training-data strata)
+
+| Path | Type | Status | Checksum |
+|---|---|---|---|
+| `docs/srpdik/SRPDIK_DLS_BASELINE_FAILURE_ANALYSIS.md` | Phase 1A failure-mode analysis (13 sections) | final for Phase 1A | n/a |
+| `docs/srpdik/SRPDIK_TRAINING_STRATA_SPEC.md` | Phase 1A training-data strata design (8 strata) | final for Phase 1A; sampling shares PROPOSED, not locked | n/a |
+| `docs/srpdik/srpdik_dls_failure_mode_table.csv` | Phase 1A failure-mode table (point-IK + trajectory, dev/val per-group, frozen aggregate-only rows) | final for Phase 1A; 36 rows | n/a (validated by `tests/srpdik/test_phase1a_analysis_artifacts.py`) |
+| `docs/srpdik/srpdik_waypoint0_analysis.csv` | Phase 1A waypoint-0 analysis (12 rows: 2 splits x 3 difficulties x 2 methods) | final for Phase 1A | n/a |
+| `docs/srpdik/srpdik_dls_baseline_summary.json` | Phase 1A machine-readable rollup (metrics, dominant failure mode, waypoint-0 findings, training strata, unknowns, data-access audit) | final for Phase 1A | n/a |
+| `tests/srpdik/test_phase1a_analysis_artifacts.py` | Phase 1A artifact validator (27 tests) | final for Phase 1A | n/a |
+| `docs/srpdik/DECISIONS.md` | updated: #9 marked resolved, #11 added | updated this phase | n/a |
+| `docs/srpdik/SRPDIK_IMPLEMENTATION_LOG.md` | appended: Phase 1A entry | updated this phase | n/a |
+
+No dataset v1 or v2 file was created, modified, or read-written this phase. No `frozen_test` raw
+per-sample file was opened (only the published `final_dls_summary.json` aggregate and the frozen
+access ledger/report). No DLS solver/generator/evaluation code was run. No training run occurred.

@@ -1,0 +1,98 @@
+{
+  "schema_version": "1.0.0",
+  "analysis_version": "phase1a-1.0.0",
+  "phase_id": "1A",
+  "candidate_name": "cand_D_pure_dls",
+  "dls_lock_hash": {
+    "algorithm": "sha256",
+    "value": "faea80ed18588dd3bb4f041180db9b3a3dfb20822994ddfa307d7afe362a3fee",
+    "hashed_file": "configs/srpdik/dls_locked.json",
+    "note": "whole-file hash of the Phase 1 immutable DLS lock snapshot, computed for this document's traceability only; the lock's own internal per-source-file hashes live in that file's source_code_files field"
+  },
+  "official_result_sources": [
+    "KR810_Tier0_Tier4_Dataset_v2.0.0/final_dls_summary.json",
+    "mpdik_kassow_v2_eval_devval/development/cand_D_pure_dls/tier1_point_dls/{point_results,point_metrics,point_failures}.csv",
+    "mpdik_kassow_v2_eval_devval/validation/cand_D_pure_dls/tier1_point_dls/{point_results,point_metrics,point_failures}.csv",
+    "mpdik_kassow_v2_eval_devval/development/cand_D_pure_dls/tier2_sequential_dls/{trajectory_trial_summaries,waypoint_results,warm_vs_cold}.csv",
+    "mpdik_kassow_v2_eval_devval/validation/cand_D_pure_dls/tier2_sequential_dls/{trajectory_trial_summaries,waypoint_results,warm_vs_cold}.csv",
+    "mpdik_kassow_v2_eval_devval/development/cand_D_pure_dls/tier3_trajectory_tracking/trajectory_metrics.csv",
+    "mpdik_kassow_v2_eval_devval/validation/cand_D_pure_dls/tier3_trajectory_tracking/trajectory_metrics.csv",
+    "mpdik_kassow_v2_eval_devval/development/cand_D_pure_dls/resolved_config.json",
+    "mpdik_kassow_v2_eval_frozen/frozen_access_ledger.json",
+    "mpdik_kassow_v2_eval_frozen/frozen_access_report.json",
+    "docs/CHATGPT_DLS_CURRENT_STATE_BRIEF.md",
+    "docs/srpdik/DLS_TRAJECTORY_PLOT_DIAGNOSIS.md"
+  ],
+  "official_metrics": {
+    "point_ik": {
+      "development": {"success_standard": 0.9633333333333334, "numerator": 1156, "denominator": 1200},
+      "validation": {"success_standard": 0.9625, "numerator": 1155, "denominator": 1200},
+      "frozen_test": {"success_standard": 0.9508333333333333, "numerator": 3423, "denominator": 3600,
+        "success_coarse": 0.9566666666666667, "success_strict": 0.9461111111111111,
+        "aliases_reconciled": ["95.08%", "0.9508", "0.951", "95.1%"]}
+    },
+    "trajectory": {
+      "development": {"warm_start_success_standard": 0.566154761904762, "cold_start_success_standard": 0.38971428571428574, "denominator": 84000},
+      "validation": {"warm_start_success_standard": 0.6905357142857144, "cold_start_success_standard": 0.42823809523809525, "denominator": 84000},
+      "frozen_test": {"warm_start_success_standard": 0.5493095238095238, "warm_start_numerator": 46142,
+        "cold_start_success_standard": 0.32919047619047614, "cold_start_numerator": 27652, "denominator": 84000}
+    }
+  },
+  "dominant_failure_mode": {
+    "name": "stagnation",
+    "point_ik_large_orientation_change_group": {"development_failures": 21, "development_group_size": 200, "share_of_failures_that_are_stagnation": 1.0,
+      "validation_failures": 27, "validation_group_size": 200},
+    "trajectory_waypoint_level_dev_plus_val": {
+      "total_waypoint_solves": 336000, "total_stagnation": 161965, "stagnation_rate_over_all_solves": 0.4820386904761905,
+      "total_failed_standard": 161730, "total_stagnation_and_failed_standard": 160139,
+      "stagnation_rate_over_failed_standard_solves": 0.9901626167068571,
+      "stagnation_but_success_standard_count": 1826, "stagnation_but_success_standard_share_of_stagnation": 0.01127404068780292
+    },
+    "published_frozen_aggregate_combined_point_and_trajectory": {"stagnation": 93765, "max_iterations": 1952, "note": "final_dls_summary.json::frozen_test.failures.failure_reason_counts, combines point_ik + trajectory + both methods"},
+    "conclusion": "Stagnation (a descent/basin failure inside the 5-step stagnation window) dominates over max_iterations, joint_limit_failure, and non_finite_* at every level examined (point-IK groups, trajectory waypoints, published frozen aggregate). A deeper iteration budget alone does not fix it."
+  },
+  "waypoint0_findings": {
+    "standard_success_rate_range": [0.328, 0.443],
+    "stagnation_rate_range": [0.543, 0.671],
+    "worse_than_full_trajectory_average": true,
+    "correlation_with_downstream_failure_streak": "trials whose waypoint 0 fails show much longer mean maximum_failure_streak later in the same trajectory than trials whose waypoint 0 succeeds (association, not proven causal)",
+    "h1_vs_h2_conclusion": "UNKNOWN_H1_VS_H2",
+    "h1_vs_h2_reason": "no initial-state joint-limit-margin or sigma_min field exists for trajectory waypoints in any permitted evaluation summary; no per-iteration trace was captured (record_history was never invoked for these runs)",
+    "plot_bug_finding": "not a plot/data bug (root cause independently proven in docs/srpdik/DLS_TRAJECTORY_PLOT_DIAGNOSIS.md and reconfirmed at full-dataset scale this phase); a separate, minor, purely cosmetic issue exists in visualization/plot_target_actual_3d.py (no visual break at failed waypoints)",
+    "in_scope_for_srpdik_initializer": true
+  },
+  "joint_limit_and_singularity_findings": {
+    "final_margin_zero_share_range": [0.41, 0.74],
+    "final_margin_zero_stagnation_association": {"low_margin_bin_stagnation_rate": 0.629007, "high_margin_bin_stagnation_rate": 0.128474},
+    "final_sigma_min_lowest_quartile_stagnation_rate": 0.617787,
+    "candidate_structural_note": "cand_D_pure_dls has joint_limit_avoidance=false, null_space_gain=0.0 (null-space centering off by design/selection)"
+  },
+  "training_strata": [
+    {"name": "joint_limit_sensitive", "priority": 1, "recommended_sampling_share": 0.15, "status": "DATA-SUPPORTED"},
+    {"name": "near_singularity", "priority": 2, "recommended_sampling_share": 0.10, "status": "DATA-SUPPORTED"},
+    {"name": "stagnation_rescue", "priority": 3, "recommended_sampling_share": 0.30, "status": "DATA-SUPPORTED"},
+    {"name": "large_orientation", "priority": 4, "recommended_sampling_share": 0.10, "status": "DATA-SUPPORTED"},
+    {"name": "far_target", "priority": 5, "recommended_sampling_share": 0.05, "status": "DATA-SUPPORTED"},
+    {"name": "high_iteration_success", "priority": 6, "recommended_sampling_share": 0.10, "status": "DATA-SUPPORTED"},
+    {"name": "do_no_harm", "priority": 7, "recommended_sampling_share": 0.10, "status": "DATA-SUPPORTED"},
+    {"name": "balanced_regular", "priority": 8, "recommended_sampling_share": 0.10, "status": "PROPOSED", "note": "sampled independently from the full population; not mutually exclusive with strata 1-7, see SRPDIK_TRAINING_STRATA_SPEC.md section 2"}
+  ],
+  "training_strata_sampling_share_sum": 1.0,
+  "unknowns": [
+    "UNKNOWN_H1_VS_H2: whether waypoint-0 stagnation is caused by q_initial already at/near a joint limit versus the DLS iteration walking to a limit and stalling",
+    "whether the sigma_min/margin associations with stagnation are causal or confounded with general target difficulty (no controlled ablation run)",
+    "fine-grained trajectory shape family (line/circle/figure8/helix/free_form) and challenge family breakdowns were not computed this phase",
+    "frozen-split per-difficulty-group/per-family/per-trial breakdowns do not exist in this analysis at all, only the published aggregate",
+    "whether joint_limit_avoidance=false/null_space_gain=0.0 is a causal contributor to the high margin-zero rate versus incidental to candidate D specifically"
+  ],
+  "data_access_audit": {
+    "raw_frozen_accessed": false,
+    "frozen_public_summary_used": true,
+    "protected_data_accessed": false,
+    "dataset_v1_modified": false,
+    "dataset_v2_modified": false,
+    "dls_source_modified": false,
+    "evaluation_rerun": false,
+    "training_run": false
+  }
+}

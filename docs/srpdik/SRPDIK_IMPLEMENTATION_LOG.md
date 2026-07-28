@@ -251,3 +251,127 @@ Do not paste long source excerpts here — point to the file/commit instead.
   `next_atomic_task`: "analyze locked pure-DLS failure modes and define SRPDIK training-data
   strata" (per the governing prompt's completion instructions). Phase 1A itself was not started
   this session, per the prompt's explicit instruction not to proceed past the gate.
+
+## 2026-07-28 — Phase 1A (session start, fresh session after `/clear`)
+
+- Restored state per the required read order (`PHASE_STATUS.json` -> `HANDOFF.md` ->
+  `DECISIONS.md` -> `SRPDIK_SOURCE_MAP.md` -> `SRPDIK_REFERENCE_REQUIREMENTS.md` ->
+  `SRPDIK_IMPLEMENTATION_PLAN.md` -> `ARTIFACT_INDEX.md` -> `NEXT_COMMANDS.md` ->
+  `SRPDIK_METHOD_SPEC.md` -> `configs/srpdik/dls_locked.json`). Confirmed: Phase 1 `complete`,
+  `cand_D_pure_dls` official candidate, 71/864 test counts match, `frozen_accessed=false`,
+  `next_phase="1A"`. Re-ran `python pipelines/run_srpdik_audit.py` (with `PYTHONPATH=.`): all
+  checks pass, `dirty_files=1` (`notebooks/srpdik/`, pre-existing from session start).
+- `git status --short` / `branch --show-current` / `rev-parse HEAD`: dirty tree
+  (`?? notebooks/srpdik/`, pre-existing), branch `feature/dataset-v2`, commit `51591550...`. Per
+  protocol: no branch created, no commit planned; `commit_status="skipped_dirty_tree"`.
+
+### Atomic task 1 — source inventory
+
+- Identified official result sources by reading `docs/CHATGPT_DLS_CURRENT_STATE_BRIEF.md` in
+  full, then listing (not scanning) the named sibling roots
+  (`mpdik_kassow_v2_eval_devval/{development,validation}/cand_D_pure_dls/`,
+  `mpdik_kassow_v2_eval_frozen/`, `KR810_Tier0_Tier4_Dataset_v2.0.0/`). Confirmed the exact
+  point-IK/trajectory/waypoint/failure-reason/resolved-config/frozen-ledger file paths (see
+  `SRPDIK_DLS_BASELINE_FAILURE_ANALYSIS.md` §2 for the full table). Read only
+  `frozen_access_ledger.json`/`frozen_access_report.json`/`resolved_config.json` and the
+  **published** `final_dls_summary.json` for the frozen split -- never opened
+  `mpdik_kassow_v2_eval_frozen/frozen_test/cand_D_pure_dls/{tier1_point_dls,tier2_sequential_dls}
+  /*.csv`.
+- Interpreted `configs/srpdik/srpdik_data.json::splits.validation.access =
+  "requires_explicit_authorization"` as satisfied for this phase's read-only analysis by the
+  governing prompt's own §3 allowed-source list ("development summaries", "validation
+  summaries") -- recorded as `DECISIONS.md` #11.
+
+### Atomic task 2 — success-rate reconciliation
+
+- Read `KR810_Tier0_Tier4_Dataset_v2.0.0/final_dls_summary.json` directly. Resolved
+  `DECISIONS.md` #9: 95.08%/0.9508/0.951/95.1% are all the same raw value
+  `frozen_test.point_ik.success_standard = 0.9508333333333333` (3423/3600), differing only in
+  display rounding. Cross-checked development (0.9633333333333334 = 1156/1200) and validation
+  (0.9625 = 1155/1200) against `point_metrics.csv::group=overall` in the corresponding run
+  directories -- exact match, no discrepancy. Full table in
+  `SRPDIK_DLS_BASELINE_FAILURE_ANALYSIS.md` §3.
+
+### Atomic task 3 — failure-mode table
+
+- Wrote a scratch analysis script (pandas) reading `point_results.csv` (dev+val, per
+  `difficulty_id` group 0-5 = `near_target`/`medium_target`/`far_target`/
+  `large_orientation_change`/`near_joint_limit`/`near_singularity` per
+  `dataset_v2/config_templates.py::DIFFICULTY_GROUPS`), `trajectory_trial_summaries.csv`, and
+  `waypoint_results.csv` (dev+val, 168,000 waypoint rows/split) for `cand_D_pure_dls`. Computed
+  per-group/per-(difficulty,method)/per-(source_type,method) aggregates: success
+  coarse/standard/strict, failure-reason breakdown, iteration/error percentiles, final
+  σ_min/joint-limit-margin stats. Frozen-split rows use only the published aggregate (no
+  per-group breakdown -- raw frozen files were never opened). Wrote
+  `docs/srpdik/srpdik_dls_failure_mode_table.csv` (36 rows, 44 columns).
+- Key finding: `large_orientation_change` is the hardest point-IK group (89.5% dev/val standard
+  success, 100% of failures = `stagnation`); trajectory `cold_start` stagnates far more than
+  `warm_start` (58.4% vs 38.0% of all waypoint solves, dev+val pooled).
+
+### Atomic task 4 — waypoint-0 analysis
+
+- Filtered `waypoint_id==0` from the cached waypoint dataframes, joined against
+  `trajectory_trial_summaries.csv` (`maximum_failure_streak`) and `tier3_trajectory_tracking/
+  trajectory_metrics.csv` (`coverage_ratio`) for correlation. Wrote
+  `docs/srpdik/srpdik_waypoint0_analysis.csv` (12 rows: 2 splits x 3 difficulties x 2 methods).
+- Read `docs/srpdik/DLS_TRAJECTORY_PLOT_DIAGNOSIS.md` (pre-existing) for the "actual vs target"
+  plot-bug question -- its root-cause finding (real stagnation failure, not a plot/data bug,
+  though the plot itself lacks a visual break at failed waypoints) is independently reconfirmed
+  by this phase's full-dataset aggregation (33-44% wp0 standard success, 54-67% wp0 stagnation,
+  both worse than the trajectory-wide average).
+- H1 (q_initial already at a limit) vs H2 (solver walks to a limit and stalls) vs H3
+  (insufficient data): concluded **`UNKNOWN_H1_VS_H2`** -- no initial-state margin/σ_min field
+  exists for trajectory waypoints in any permitted summary, and no iteration trace was captured.
+  Recorded the exact future diagnostic requirement (a `record_history=True` re-run, read-only,
+  single-trial) without implementing it.
+
+### Atomic task 5 — stagnation analysis
+
+- Computed stagnation rate by difficulty/method/trajectory-family/waypoint-position, and by
+  quantile bins (edges derived from the development pool only) of final σ_min, final
+  joint-limit-margin, position error, orientation error, over the pooled dev+val waypoint table
+  (336,000 rows). Dominant finding: 48.20% overall waypoint stagnation rate; 99.02% of
+  standard-tier failures are `stagnation`; final-margin<=0.089 bin has 62.9% stagnation vs 12.8%
+  above it -- the strongest single association found. Described as association only (no
+  intervention/ablation run). Saved to `stagnation_summary.json` (scratchpad) and folded into
+  `SRPDIK_DLS_BASELINE_FAILURE_ANALYSIS.md` §7.
+
+### Atomic task 6 — training strata
+
+- Defined 8 strata (`joint_limit_sensitive`, `near_singularity`, `stagnation_rescue`,
+  `large_orientation`, `far_target`, `high_iteration_success`, `do_no_harm`, `balanced_regular`)
+  in `docs/srpdik/SRPDIK_TRAINING_STRATA_SPEC.md`, each with an inclusion/exclusion predicate,
+  priority, available source fields, estimated count (grounded in the measured dev/val group
+  sizes and rates from tasks 3-5), a PROPOSED sampling share (15/10/30/10/5/10/10/10 = 100%), and
+  smoke/pilot/full usability. `balanced_regular` is the one explicit non-exclusive stratum
+  (sampled independently from the full population, logged as an overlapping draw).
+
+### Final outputs + validation
+
+- Wrote `docs/srpdik/SRPDIK_DLS_BASELINE_FAILURE_ANALYSIS.md` (13 sections per the governing
+  prompt), `docs/srpdik/SRPDIK_TRAINING_STRATA_SPEC.md` (7 sections),
+  `docs/srpdik/srpdik_dls_baseline_summary.json` (schema_version/analysis_version/candidate_name/
+  dls_lock_hash/official_metrics/dominant_failure_mode/waypoint0_findings/training_strata/
+  unknowns/data_access_audit, no absolute paths, no protected fields).
+- Wrote `tests/srpdik/test_phase1a_analysis_artifacts.py` (27 tests: CSV/JSON parse, rates in
+  [0,1], counts non-negative, success numerator/denominator consistency, no duplicate group
+  rows, deterministic row order, no absolute paths, no protected keys, no raw-frozen source
+  references, DLS candidate matches the live lock, sampling shares sum to 1.0, unknowns include
+  H1/H2, data-access audit all false except `frozen_public_summary_used`).
+- `pytest tests/srpdik/test_phase1a_analysis_artifacts.py -q`: **27 passed**.
+- `pytest tests/srpdik -q`: **98 passed** (71 Phase 1 + 27 Phase 1A, no regressions). Full
+  `pytest -q` not re-run this phase (only docs/CSV/JSON artifacts and one independent test file
+  were added; no Python source outside `tests/srpdik/` was modified), per the governing prompt's
+  §11 exemption.
+- Updated `DECISIONS.md` #9 (marked resolved, exact reconciled values recorded) and added #11
+  (validation-split read-access interpretation for this phase).
+- Data/frozen access confirmation: `raw_frozen_accessed=false`, `frozen_public_summary_used=true`,
+  `protected_data_accessed=false`, `dataset_v1_modified=false`, `dataset_v2_modified=false`,
+  `dls_source_modified=false`, `evaluation_rerun=false`, `training_run=false`.
+- `git status --short` at session end: same dirty-tree baseline (`notebooks/srpdik/`) plus this
+  phase's own new docs/test files, `DECISIONS.md` modified in place -- no dataset v1/v2 path, no
+  DLS source file, touched. Per protocol: no branch created, no commit made;
+  `commit_status="skipped_dirty_tree"`.
+- `PHASE_STATUS.json` set to `phase_id: "1A"`, `status: "complete"`, `next_phase: "2"`,
+  `next_atomic_task`: "implement deterministic SRPDIK task records and training-stream
+  generator". Phase 2 itself was not started this session.
